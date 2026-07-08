@@ -1,8 +1,8 @@
 # StellarVax
 
-[![CI](https://github.com/stellar/stellarvax/actions/workflows/ci.yml/badge.svg)](file:///workspaces/STELLARR/.github/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/stellar/stellarvax/branch/main/graph/badge.svg)](https://codecov.io/gh/stellar/stellarvax)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](file:///workspaces/STELLARR/LICENSE)
+[![CI](https://github.com/pauljacobb/stellarVax/actions/workflows/ci.yml/badge.svg)](https://github.com/pauljacobb/stellarVax/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/pauljacobb/stellarVax/branch/main/graph/badge.svg)](https://codecov.io/gh/pauljacobb/stellarVax)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/pauljacobb/stellarVax/blob/main/LICENSE)
 
 > Blockchain-based vaccination records on Stellar — soulbound, verifiable, tamper-proof.
 
