@@ -1,8 +1,7 @@
 [package]
-name = "korapay_escrow"
-version = "0.1.0"
+name = "gigflow_escrow"
+version = "1.0.0"
 edition = "2021"
-publish = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -12,11 +11,3 @@ soroban-sdk = "21.0.1"
 
 [dev-dependencies]
 soroban-sdk = { version = "21.0.1", features = ["testutils"] }
-
-[profile.release]
-opt-level = "z"
-overflow-checks = true
-debug = false
-panic = "abort"
-lto = true
-codegen-units = 1

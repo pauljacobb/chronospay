@@ -9,9 +9,9 @@ RUN npm ci --only=production
 COPY src/ ./src/
 COPY migrations/ ./migrations/
 
-EXPOSE 5000
+EXPOSE 4000
 
-ENV PORT=5000
+ENV PORT=4000
 ENV NODE_ENV=production
 
 CMD ["node", "src/index.js"]

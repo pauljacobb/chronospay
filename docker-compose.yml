@@ -3,64 +3,64 @@ version: '3.8'
 services:
   db:
     image: postgres:15-alpine
-    container_name: korapay-db
+    container_name: gigflow-db
     restart: always
     environment:
-      - POSTGRES_DB=cbpa_db
+      - POSTGRES_DB=gigflow_db
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres_password_kora_2026
+      - POSTGRES_PASSWORD=postgres_password_gig_2026
     ports:
       - "5432:5432"
     volumes:
-      - korapay-db-data:/var/lib/postgresql/data
+      - gigflow-db-data:/var/lib/postgresql/data
     networks:
-      - korapay-network
+      - gigflow-network
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: korapay-backend
+    container_name: gigflow-backend
     restart: always
     ports:
-      - "5000:5000"
+      - "4000:4000"
     environment:
-      - PORT=5000
+      - PORT=4000
       - NODE_ENV=development
-      - DATABASE_URL=postgresql://postgres:postgres_password_kora_2026@db:5432/cbpa_db
+      - DATABASE_URL=postgresql://postgres:postgres_password_gig_2026@db:5432/gigflow_db
       - JWT_SECRET=your_super_secret_jwt_key_here
       - JWT_EXPIRES_IN=7d
       - STELLAR_NETWORK=testnet
-      - STELLAR_HORIZON_URL=https://horizon-testnet.stellar.org
+      - HORIZON_URL=https://horizon-testnet.stellar.org
       - ENCRYPTION_KEY=your_32_character_encryption_key_
       - BALANCE_CACHE_TTL_SECONDS=30
       - ADMIN_PUBLIC_KEY=GBADMIN12345678901234567890123456789012345678901234567890
-      - SEP10_SERVER_KEY=SDSERVERSECRETKEYEXAMPLE123456789012345678901234567890
+      - ADMIN_SECRET_KEY=SDSERVERSECRETKEYEXAMPLE123456789012345678901234567890
     depends_on:
       - db
     networks:
-      - korapay-network
+      - gigflow-network
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: korapay-frontend
+    container_name: gigflow-frontend
     restart: always
     ports:
       - "3000:3000"
     environment:
-      - VITE_BACKEND_URL=http://backend:5000
+      - VITE_BACKEND_URL=http://backend:4000
     depends_on:
       - backend
     networks:
-      - korapay-network
+      - gigflow-network
 
 volumes:
-  korapay-db-data:
-    name: korapay-db-data
+  gigflow-db-data:
+    name: gigflow-db-data
 
 networks:
-  korapay-network:
-    name: korapay-network
+  gigflow-network:
+    name: gigflow-network
     driver: bridge

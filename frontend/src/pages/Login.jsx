@@ -6,7 +6,7 @@ export default function Login({ onNavigate }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
-  
+
   const { login, loading } = useAuth();
 
   const handleLogin = async (e) => {
@@ -19,19 +19,16 @@ export default function Login({ onNavigate }) {
         setErrorMsg('Invalid email or password combination.');
       }
     } catch (err) {
-      setErrorMsg(err.message || 'An unexpected login error occurred.');
+      setErrorMsg(err.message || 'Error occurred.');
     }
   };
 
-  const autofillUser = (role) => {
-    if (role === 'user') {
-      setEmail('demo@korapay.com');
+  const autofill = (role) => {
+    if (role === 'client') {
+      setEmail('client@gigflow.com');
       setPassword('password123');
-    } else if (role === 'agent') {
-      setEmail('agent@korapay.com');
-      setPassword('password123');
-    } else if (role === 'admin') {
-      setEmail('admin@korapay.com');
+    } else {
+      setEmail('freelancer@gigflow.com');
       setPassword('password123');
     }
   };
@@ -43,7 +40,7 @@ export default function Login({ onNavigate }) {
           <ArrowLeft size={16} />
         </button>
         <h2>Welcome Back</h2>
-        <p>Login to access your cross-border funds</p>
+        <p>Sign in to access your gig contracts</p>
       </div>
 
       <form onSubmit={handleLogin} className="auth-form-card glass-panel">
@@ -56,7 +53,7 @@ export default function Login({ onNavigate }) {
             <input
               type="email"
               className="form-input icon-indent"
-              placeholder="e.g. name@domain.com"
+              placeholder="email@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -86,25 +83,21 @@ export default function Login({ onNavigate }) {
         </button>
       </form>
 
-      {/* Demo helper panel */}
       <div className="glass-panel demo-quickfill-card" style={{ marginTop: '20px', padding: '12px' }}>
-        <h4 style={{ fontSize: '12px', marginBottom: '8px', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Demo Autofill Sandbox</h4>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button className="btn btn-secondary" style={{ fontSize: '11px', padding: '6px 12px' }} onClick={() => autofillUser('user')}>
-            User
+        <h4 style={{ fontSize: '11px', marginBottom: '8px', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Demo Sandbox Quick Fill</h4>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button className="btn btn-secondary" style={{ fontSize: '11px', padding: '6px 12px', flex: 1 }} onClick={() => autofill('client')}>
+            Client
           </button>
-          <button className="btn btn-secondary" style={{ fontSize: '11px', padding: '6px 12px' }} onClick={() => autofillUser('agent')}>
-            Agent
-          </button>
-          <button className="btn btn-secondary" style={{ fontSize: '11px', padding: '6px 12px' }} onClick={() => autofillUser('admin')}>
-            Admin
+          <button className="btn btn-secondary" style={{ fontSize: '11px', padding: '6px 12px', flex: 1 }} onClick={() => autofill('freelancer')}>
+            Freelancer
           </button>
         </div>
       </div>
 
       <p className="auth-footer-link" style={{ marginTop: '20px' }}>
         Don't have an account?{' '}
-        <span onClick={() => onNavigate('register')} style={{ color: 'var(--accent-cyan)', cursor: 'pointer', fontWeight: 'bold' }}>
+        <span onClick={() => onNavigate('register')} style={{ color: 'var(--accent-purple)', cursor: 'pointer', fontWeight: 'bold' }}>
           Sign Up
         </span>
       </p>

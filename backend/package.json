@@ -1,14 +1,14 @@
 {
-  "name": "korapay-backend",
+  "name": "gigflow-backend",
   "version": "1.0.0",
-  "type": "module",
+  "description": "Backend API for GigFlow freelancer marketplace",
   "main": "src/index.js",
+  "type": "module",
   "scripts": {
     "start": "node src/index.js",
     "dev": "node src/index.js",
     "test": "NODE_ENV=test node --test src/**/*.test.js",
-    "migrate": "node-pg-migrate -m migrations up",
-    "migrate:rollback": "node-pg-migrate -m migrations down"
+    "migrate": "node-pg-migrate"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^13.0.0",

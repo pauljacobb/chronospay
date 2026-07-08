@@ -10,6 +10,6 @@ COPY . .
 
 EXPOSE 3000
 
-ENV VITE_BACKEND_URL=http://backend:5000
+ENV VITE_BACKEND_URL=http://backend:4000
 
 CMD ["npm", "run", "dev", "--", "--host"]

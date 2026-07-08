@@ -5,13 +5,12 @@ import Welcome from './pages/Welcome';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
-import SendMoney from './pages/SendMoney';
-import ReceiveMoney from './pages/ReceiveMoney';
-import TransactionHistory from './pages/TransactionHistory';
+import PostJob from './pages/PostJob';
+import Wallet from './pages/Wallet';
 import Profile from './pages/Profile';
 
 function AppContent() {
-  const { user, token, loading } = useAuth();
+  const { token, loading } = useAuth();
   
   // Navigation tabs state
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -24,7 +23,7 @@ function AppContent() {
       <div className="mobile-shell-wrapper">
         <div className="mobile-viewport glass-panel centered-loader-state" style={{ justifyContent: 'center', height: '100%' }}>
           <span className="loader" style={{ width: '32px', height: '32px' }}></span>
-          <p style={{ marginTop: '16px' }}>Recovering secure Stellar session...</p>
+          <p style={{ marginTop: '16px' }}>Connecting to Freighter wallet...</p>
         </div>
       </div>
     );
@@ -47,9 +46,8 @@ function AppContent() {
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
       {activeTab === 'dashboard' && <Dashboard />}
-      {activeTab === 'send' && <SendMoney />}
-      {activeTab === 'receive' && <ReceiveMoney />}
-      {activeTab === 'history' && <TransactionHistory />}
+      {activeTab === 'postjob' && <PostJob onPostSuccess={() => setActiveTab('dashboard')} />}
+      {activeTab === 'wallet' && <Wallet />}
       {activeTab === 'profile' && <Profile />}
     </Layout>
   );

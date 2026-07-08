@@ -1,24 +1,20 @@
-— Cross-Border Payment App for Africa
+# GigFlow — Decentralized Freelance Marketplace
 
-[![CI](https://github.com/pauljacobb/koraPay/actions/workflows/ci.yml/badge.svg)](https://github.com/pauljacobb/koraPay/actions/workflows/ci.yml)
+[![CI](https://github.com/pauljacobb/gigflow/actions/workflows/ci.yml/badge.svg)](https://github.com/pauljacobb/gigflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](file:///workspaces/STELLARR/LICENSE)
 
-KoraPay is a production-ready cross-border remittance platform built on the Stellar Network, enabling fast, secure, and low-cost payments across African countries using USDC stablecoins and XLM.
-
-The platform connects senders with registered payout agents who handle local fiat distribution, with the Stellar blockchain managing escrow, fee collection, and settlement. Designed for emerging markets where stablecoin remittance rails can significantly reduce cross-border payment costs.
+GigFlow is an open-source decentralized freelance marketplace where clients post jobs, freelancers apply, and payments are secured in Soroban smart contract escrows — released automatically when work is approved. No middlemen. No payment delays. No platform fees eating your earnings.
 
 ---
 
 ## 🌟 Key Features
 
-- **Escrow-Based Transfers**: Secure USDC/XLM deposits locked on-chain via Soroban contracts until payout confirmation.
-- **Agent Network**: Registered local agents handle fiat distribution off-chain.
-- **Automated Fee Collection**: Platform fees calculated in basis points (bps) and accumulated automatically.
-- **Compliance & Asset Clawback**: Admin operations supporting the Stellar clawback operation on USDC assets for regulatory compliance.
-- **Authorization Security**: JWT-based role access control (senders, payout agents, administrators).
-- **Fraud Protection**: Rate limiting and transaction velocity checks (maximum of 5 transactions per 10 minutes).
-- **Saved Contacts & QR Codes**: Shareable Stellar public key payment QR codes and contacts CRUD.
-- **Mobile-First UX**: Responsive mobile-first interface simulating mobile screen sizes with bottom navigation.
+- **Freighter Wallet Integration**: Connect and authenticate securely using the Freighter browser wallet keypairs.
+- **Escrow Guaranteed Budgets**: Clients deposit XLM budgets into a Soroban smart contract when posting contracts or hiring freelancers.
+- **Role-Based Workflows**: Tailored client/freelancer dashboards for posting contracts, checking proposals, and approving work.
+- **Instantly Released Payments**: Client work approval triggers direct transfers from the escrow contract to the freelancer's wallet.
+- **Zero Fees & Middlemen**: Remittance occurs directly between client and freelancer keys.
+- **Offline Mock Development sandbox**: Run the entire web application locally with mock contract actions logged to the browser console. No networks or wallet extensions required!
 
 ---
 
@@ -28,36 +24,14 @@ The platform connects senders with registered payout agents who handle local fia
 - **Escrow Soroban Contract**: [contracts/escrow/src/lib.rs](file:///workspaces/STELLARR/contracts/escrow/src/lib.rs)
 - **Database Schema**: [database/schema.sql](file:///workspaces/STELLARR/database/schema.sql)
 - **Database Migration**: [backend/migrations/001_initial_schema.js](file:///workspaces/STELLARR/backend/migrations/001_initial_schema.js)
-- **Wallet Auth Controller**: [backend/src/controllers/authController.js](file:///workspaces/STELLARR/backend/src/controllers/authController.js) (Automatic wallet generation & key encryption)
-- **Agent Escrow Controller**: [backend/src/controllers/escrowController.js](file:///workspaces/STELLARR/backend/src/controllers/escrowController.js)
+- **Wallet Auth Controller**: [backend/src/controllers/authController.js](file:///workspaces/STELLARR/backend/src/controllers/authController.js)
+- **Job Escrow Controller**: [backend/src/controllers/jobController.js](file:///workspaces/STELLARR/backend/src/controllers/jobController.js) (Deposits, releases, and refunds)
 - **Stellar Horizon Service**: [backend/src/services/stellar.js](file:///workspaces/STELLARR/backend/src/services/stellar.js)
-- **Backend API Routes**: [backend/src/routes/payments.js](file:///workspaces/STELLARR/backend/src/routes/payments.js)
+- **Backend API Routes**: [backend/src/routes/jobs.js](file:///workspaces/STELLARR/backend/src/routes/jobs.js)
 - **Vite Config & API Proxy**: [frontend/vite.config.js](file:///workspaces/STELLARR/frontend/vite.config.js)
-- **Remittance React Page**: [frontend/src/pages/SendMoney.jsx](file:///workspaces/STELLARR/frontend/src/pages/SendMoney.jsx)
-- **Dashboard React Page**: [frontend/src/pages/Dashboard.jsx](file:///workspaces/STELLARR/frontend/src/pages/Dashboard.jsx)
-- **Bottom Navigation Layout**: [frontend/src/components/Layout.jsx](file:///workspaces/STELLARR/frontend/src/components/Layout.jsx)
-
----
-
-## 💰 Fee Model
-
-Platform fees are calculated using basis points (bps) at the contract and backend boundaries:
-
-$$\text{fee} = \frac{\text{amount} \times \text{fee\_bps}}{10000}$$
-
-- **250 bps** = 2.5% platform fee
-- **500 bps** = 5.0% platform fee
-
-Fees accumulate inside the platform fee address, governed by the administrator.
-
----
-
-## 🔒 Compliance — Asset Clawback
-
-For regulatory compliance (fraud investigations, court orders), KoraPay supports the Stellar clawback operation on USDC assets. This allows the asset issuer to reclaim tokens from a user's account when legally required.
-- **Endpoint**: `POST /api/admin/clawback` (admin-only)
-- Requires the issuer account to have `AUTH_CLAWBACK_ENABLED_FLAG` set on-chain.
-- Configured via `ISSUER_PUBLIC_KEY` and `ISSUER_ENCRYPTED_SECRET_KEY` in `.env`.
+- **Marketplace Dashboard React Page**: [frontend/src/pages/Dashboard.jsx](file:///workspaces/STELLARR/frontend/src/pages/Dashboard.jsx)
+- **Gig Escrow Control React Page**: [frontend/src/pages/JobDetails.jsx](file:///workspaces/STELLARR/frontend/src/pages/JobDetails.jsx)
+- **Post Job Escrow React Page**: [frontend/src/pages/PostJob.jsx](file:///workspaces/STELLARR/frontend/src/pages/PostJob.jsx)
 
 ---
 
@@ -66,7 +40,7 @@ For regulatory compliance (fraud investigations, court orders), KoraPay supports
 ### 1. Database Setup
 Create database in PostgreSQL:
 ```bash
-psql -U postgres -c "CREATE DATABASE cbpa_db;"
+psql -U postgres -c "CREATE DATABASE gigflow_db;"
 ```
 
 ### 2. Configure Environment
@@ -82,7 +56,7 @@ npm run migrate
 ```
 
 ### 4. Run Locally (Dev Servers)
-- **Backend API**: `cd backend && npm install && npm run dev` (starts on port 5000)
+- **Backend API**: `cd backend && npm install && npm run dev` (starts on port 4000)
 - **Frontend App**: `cd frontend && npm install && npm run dev` (starts on port 3000)
 
 ### 5. Running with Docker Compose (Recommended)
@@ -91,7 +65,20 @@ Build and run the entire multi-service stack (PostgreSQL + Express API + React F
 docker compose up --build
 ```
 - **Web App URL**: `http://localhost:3000`
-- **Backend API URL**: `http://localhost:5000`
+- **Backend API URL**: `http://localhost:4000`
+
+---
+
+## 🧪 Offline Development with Contract Mock
+
+For frontend development without a deployed Soroban contract:
+1. Enable mock mode in frontend environment variables.
+2. Start the frontend: `npm run dev`.
+3. What works offline:
+   - Job creation with simulated escrow locking.
+   - Proposals, bids, and freelancer assignments.
+   - Escrow payout releases and client refunds.
+   - All contract operations logged to the browser console.
 
 ---
 
@@ -111,4 +98,4 @@ cd backend && npm test
 
 ## 📄 License
 
-MIT © [KoraPay Contributors](file:///workspaces/STELLARR/LICENSE)
+MIT © [GigFlow Contributors](file:///workspaces/STELLARR/LICENSE)

@@ -1,24 +1,24 @@
 import React from 'react';
-import { Home, Send, QrCode, History, User } from 'lucide-react';
+import { Briefcase, PlusCircle, Wallet, User } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function Layout({ activeTab, setActiveTab, children }) {
+  const { user } = useAuth();
+
   const navItems = [
-    { id: 'dashboard', label: 'Home', icon: Home },
-    { id: 'send', label: 'Send', icon: Send },
-    { id: 'receive', label: 'Receive', icon: QrCode },
-    { id: 'history', label: 'History', icon: History },
+    { id: 'dashboard', label: 'Jobs', icon: Briefcase },
+    ...(user?.role === 'client' ? [{ id: 'postjob', label: 'Post Job', icon: PlusCircle }] : []),
+    { id: 'wallet', label: 'Wallet', icon: Wallet },
     { id: 'profile', label: 'Profile', icon: User }
   ];
 
   return (
     <div className="mobile-shell-wrapper">
       <div className="mobile-viewport glass-panel">
-        {/* Viewport Content */}
         <div className="viewport-content">
           {children}
         </div>
 
-        {/* Bottom Nav Bar */}
         <nav className="bottom-nav-bar">
           {navItems.map((item) => {
             const IconComponent = item.icon;

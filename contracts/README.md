@@ -1,27 +1,19 @@
-# KoraPay Smart Contracts Guide
+# GigFlow Escrow Smart Contract
 
-This directory houses the on-chain infrastructure for KoraPay.
+This directory contains the Soroban smart contract managing the GigFlow freelance marketplace escrow deposits, freelancer assignments, payout releases, and refunds.
 
----
+## Structure
+- `src/lib.rs`: Rust implementation of the Soroban contract, including tests.
+- `Cargo.toml`: Package dependencies.
 
-## 📂 Subdirectories
-
-- **[escrow/](file:///workspaces/STELLARR/contracts/escrow/)**: Soroban Rust contract managing remittances, payout distributions, and platform fee splits.
-
----
-
-## 🛠️ Build & Test Commands
-
-Ensure you have Rust and the `wasm32-unknown-unknown` target configured:
-
+## Compile Contract
+To build the WASM contract target:
 ```bash
-# Add targets
-rustup target add wasm32-unknown-unknown
-
-# Compile to WASM (Release build)
-cd escrow
 cargo build --target wasm32-unknown-unknown --release
+```
 
-# Run unit tests (simulates ledger execution)
+## Run Unit Tests
+To run unit tests locally:
+```bash
 cargo test
 ```

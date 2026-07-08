@@ -1,19 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import app from './app.js';
-import { query } from './db.js';
+import { mockDb } from './db.js';
 
 let server;
 let port;
 let baseUrl;
-let token;
-let userPub = 'GB3R2XWH7XCSHOHH23V7SOP5HET7N2GCRMXK75L62LCR6WFFY6C6Y5AX';
+
+let clientToken;
+let freelancerToken;
+let jobId;
+let proposalId;
 
 test.before(() => {
   return new Promise((resolve) => {
-    // Force test environment variables
     process.env.ENCRYPTION_KEY = 'your_32_character_encryption_key_';
-    process.env.JWT_SECRET = 'dev_secret_key_korapay';
+    process.env.JWT_SECRET = 'dev_secret_key_gigflow';
     
     server = app.listen(0, () => {
       port = server.address().port;
@@ -40,11 +42,12 @@ test('GET /health returns 200 OK', async () => {
   assert.strictEqual(json.status, 'OK');
 });
 
-test('POST /api/auth/register creates user, wallet, and returns token', async () => {
+test('POST /api/auth/register (Client)', async () => {
   const payload = {
-    name: 'Kora Developer',
-    email: `dev_${Date.now()}@korapay.com`,
-    password: 'securePassword123'
+    name: 'Gig Client',
+    email: `client_${Date.now()}@gigflow.com`,
+    password: 'password123',
+    role: 'client'
   };
 
   const res = await fetch(`${baseUrl}/api/auth/register`, {
@@ -56,69 +59,43 @@ test('POST /api/auth/register creates user, wallet, and returns token', async ()
   assert.strictEqual(res.status, 201);
   const json = await res.json();
   assert.ok(json.token);
-  assert.ok(json.user.publicKey);
-  token = json.token; // Save token for authenticated requests
+  assert.strictEqual(json.user.role, 'client');
+  clientToken = json.token;
 });
 
-test('POST /api/auth/login validates credentials and returns token', async () => {
+test('POST /api/auth/register (Freelancer)', async () => {
   const payload = {
-    email: 'test_login@korapay.com',
-    password: 'password123'
+    name: 'Gig Freelancer',
+    email: `freelancer_${Date.now()}@gigflow.com`,
+    password: 'password123',
+    role: 'freelancer'
   };
 
-  // Seed user in mock db
-  await fetch(`${baseUrl}/api/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: 'Tester', email: payload.email, password: payload.password })
-  });
-
-  const res = await fetch(`${baseUrl}/api/auth/login`, {
+  const res = await fetch(`${baseUrl}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
 
-  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.status, 201);
   const json = await res.json();
   assert.ok(json.token);
+  assert.strictEqual(json.user.role, 'freelancer');
+  freelancerToken = json.token;
 });
 
-test('GET /api/wallet/contacts CRUD flows', async () => {
-  // Add contact
-  const addRes = await fetch(`${baseUrl}/api/wallet/contacts`, {
-    method: 'POST',
-    headers: { 
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
-    body: JSON.stringify({ name: 'Alice Friend', walletAddress: 'GD3V7SOP5HET7N2GCRMXK75L62LCR6WFFY6C6Y5AXKB3R2XWH7XCSHOH' })
-  });
-  assert.strictEqual(addRes.status, 201);
-  const addJson = await addRes.json();
-  assert.strictEqual(addJson.contact.name, 'Alice Friend');
-
-  // List contacts
-  const listRes = await fetch(`${baseUrl}/api/wallet/contacts`, {
-    headers: { 'Authorization': `Bearer ${token}` }
-  });
-  assert.strictEqual(listRes.status, 200);
-  const listJson = await listRes.json();
-  assert.ok(listJson.contacts.length > 0);
-});
-
-test('POST /api/payments/send executes payment transfer', async () => {
+test('POST /api/jobs creates a job listing and locks budget', async () => {
   const payload = {
-    recipientAddress: 'GD3V7SOP5HET7N2GCRMXK75L62LCR6WFFY6C6Y5AXKB3R2XWH7XCSHOH',
-    amount: '10.5',
-    asset: 'XLM'
+    title: 'Develop Soroban Smart Contract',
+    description: 'Looking for a Rust developer to write custom escrow modules on Stellar.',
+    budget: '1500.00'
   };
 
-  const res = await fetch(`${baseUrl}/api/payments/send`, {
+  const res = await fetch(`${baseUrl}/api/jobs`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
+      'Authorization': `Bearer ${clientToken}`
     },
     body: JSON.stringify(payload)
   });
@@ -126,27 +103,61 @@ test('POST /api/payments/send executes payment transfer', async () => {
   assert.strictEqual(res.status, 201);
   const json = await res.json();
   assert.ok(json.success);
-  assert.ok(json.txHash);
+  assert.strictEqual(json.job.title, payload.title);
+  assert.strictEqual(json.job.status, 'open');
+  jobId = json.job.id; // Save job ID
 });
 
-test('POST /api/escrow/create rejects unapproved agents', async () => {
+test('POST /api/jobs/:job_id/proposals bids on job', async () => {
   const payload = {
-    agent_wallet: 'GCSUPERUNAPPROVEDAGENT12345678901234567890123456789012345',
-    amount: '100.0',
-    asset: 'USDC'
+    bid_amount: '1450.00',
+    cover_letter: 'I have 3 years of Soroban and Stellar Rust experience.'
   };
 
-  const res = await fetch(`${baseUrl}/api/escrow/create`, {
+  const res = await fetch(`${baseUrl}/api/jobs/${jobId}/proposals`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
+      'Authorization': `Bearer ${freelancerToken}`
     },
     body: JSON.stringify(payload)
   });
 
-  // Rejects because the agent is not approved in database
-  assert.strictEqual(res.status, 400);
+  assert.strictEqual(res.status, 201);
   const json = await res.json();
-  assert.strictEqual(json.error, 'Agent is not registered in the AfriPay network');
+  assert.ok(json.success);
+  assert.strictEqual(json.proposal.cover_letter, payload.cover_letter);
+  proposalId = json.proposal.id; // Save proposal ID
+});
+
+test('POST /api/jobs/:id/assign assigns proposal to job', async () => {
+  const res = await fetch(`${baseUrl}/api/jobs/${jobId}/assign`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${clientToken}`
+    },
+    body: JSON.stringify({ proposal_id: proposalId })
+  });
+
+  assert.strictEqual(res.status, 200);
+  const json = await res.json();
+  assert.ok(json.success);
+  assert.ok(json.escrowId);
+  assert.strictEqual(json.job.status, 'assigned');
+});
+
+test('POST /api/jobs/:id/release completes job and releases escrow', async () => {
+  const res = await fetch(`${baseUrl}/api/jobs/${jobId}/release`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${clientToken}`
+    }
+  });
+
+  assert.strictEqual(res.status, 200);
+  const json = await res.json();
+  assert.ok(json.success);
+  assert.strictEqual(json.job.status, 'completed');
+  assert.ok(json.txHash);
 });

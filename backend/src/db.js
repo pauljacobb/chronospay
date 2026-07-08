@@ -1,6 +1,5 @@
 import pg from 'pg';
 import winston from 'winston';
-import crypto from 'crypto';
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -8,193 +7,196 @@ const logger = winston.createLogger({
 });
 
 const isTest = process.env.NODE_ENV === 'test';
-let pool;
+const hasDbUrl = !!process.env.DATABASE_URL;
 
-if (process.env.DATABASE_URL && !isTest) {
+let pool = null;
+
+if (hasDbUrl && !isTest) {
   pool = new pg.Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.DATABASE_URL.includes('sslmode=require') ? { rejectUnauthorized: false } : false
+    connectionString: process.env.DATABASE_URL
   });
-  logger.info("PostgreSQL Pool initialized.");
 } else {
-  logger.warn("Using KoraPay in-memory mock database fallback.");
+  logger.warn('Using GigFlow in-memory mock database fallback.');
 }
 
-// In-memory fallback database tables
-const mockDb = {
+// In-memory mock database tables
+export const mockDb = {
   users: [],
   wallets: [],
-  agents: [],
-  transactions: [],
-  contacts: [],
-  tickets: []
+  jobs: [],
+  proposals: []
 };
 
-/**
- * Executes a PostgreSQL query or processes a simulated in-memory SQL request.
- * @param {string} text 
- * @param {Array} params 
- * @returns {Promise<{rows: Array, rowCount?: number}>}
- */
-export const query = async (text, params = []) => {
-  if (pool) {
-    return pool.query(text, params);
-  }
+// Simple Mock SQL Parser for Offline/Test mode
+function runMockQuery(text, params) {
+  const normalized = text.replace(/\s+/g, ' ').trim();
 
-  const sql = text.trim().replace(/\s+/g, ' ');
-
-  if (sql.startsWith('INSERT INTO users')) {
-    const id = crypto.randomUUID();
-    const newUser = {
-      id,
+  // 1. Insert User
+  if (normalized.startsWith('INSERT INTO users')) {
+    const user = {
+      id: `u-${Math.random().toString(36).substring(2, 9)}`,
       name: params[0],
       email: params[1],
       password_hash: params[2],
-      role: params[3] || 'user',
-      created_at: new Date()
+      role: params[3] || 'client',
+      wallet_address: params[4] || null,
+      created_at: new Date().toISOString()
     };
-    mockDb.users.push(newUser);
-    return { rows: [newUser] };
+    mockDb.users.push(user);
+    return { rows: [user], rowCount: 1 };
   }
 
-  if (sql.startsWith('SELECT * FROM users WHERE email =')) {
-    const email = params[0];
-    const user = mockDb.users.find(u => u.email === email);
-    return { rows: user ? [user] : [] };
+  // 2. Query User by Email
+  if (normalized.startsWith('SELECT * FROM users WHERE email =')) {
+    const user = mockDb.users.find(u => u.email === params[0]);
+    return { rows: user ? [user] : [], rowCount: user ? 1 : 0 };
   }
 
-  if (sql.startsWith('SELECT * FROM users WHERE id =')) {
-    const id = params[0];
-    const user = mockDb.users.find(u => u.id === id);
-    return { rows: user ? [user] : [] };
+  // 3. Query User by ID
+  if (normalized.startsWith('SELECT') && normalized.includes('FROM users WHERE id =')) {
+    const user = mockDb.users.find(u => u.id === params[0]);
+    return { rows: user ? [user] : [], rowCount: user ? 1 : 0 };
   }
 
-  if (sql.startsWith('INSERT INTO wallets')) {
-    const id = crypto.randomUUID();
-    const newWallet = {
-      id,
+  // 4. Insert Wallet
+  if (normalized.startsWith('INSERT INTO wallets')) {
+    const wallet = {
+      id: `w-${Math.random().toString(36).substring(2, 9)}`,
       user_id: params[0],
       public_key: params[1],
       encrypted_secret_key: params[2],
       iv: params[3],
-      created_at: new Date()
+      created_at: new Date().toISOString()
     };
-    mockDb.wallets.push(newWallet);
-    return { rows: [newWallet] };
+    mockDb.wallets.push(wallet);
+    return { rows: [wallet], rowCount: 1 };
   }
 
-  if (sql.startsWith('SELECT * FROM wallets WHERE user_id =')) {
-    const user_id = params[0];
-    const wallet = mockDb.wallets.find(w => w.user_id === user_id);
-    return { rows: wallet ? [wallet] : [] };
+  // 5. Query Wallet by User ID
+  if (normalized.startsWith('SELECT * FROM wallets WHERE user_id =')) {
+    const wallet = mockDb.wallets.find(w => w.user_id === params[0]);
+    return { rows: wallet ? [wallet] : [], rowCount: wallet ? 1 : 0 };
   }
 
-  if (sql.startsWith('INSERT INTO contacts')) {
-    const id = crypto.randomUUID();
-    const newContact = {
-      id,
-      user_id: params[0],
-      name: params[1],
-      wallet_address: params[2],
-      created_at: new Date()
-    };
-    mockDb.contacts.push(newContact);
-    return { rows: [newContact] };
+  // 6. Query Wallet Public Key by User ID
+  if (normalized.startsWith('SELECT public_key FROM wallets WHERE user_id =')) {
+    const wallet = mockDb.wallets.find(w => w.user_id === params[0]);
+    return { rows: wallet ? [{ public_key: wallet.public_key }] : [], rowCount: wallet ? 1 : 0 };
   }
 
-  if (sql.startsWith('SELECT * FROM contacts WHERE user_id =')) {
-    const user_id = params[0];
-    const list = mockDb.contacts.filter(c => c.user_id === user_id);
-    return { rows: list };
-  }
-
-  if (sql.startsWith('DELETE FROM contacts WHERE id =')) {
-    const id = params[0];
-    const index = mockDb.contacts.findIndex(c => c.id === id);
-    if (index !== -1) mockDb.contacts.splice(index, 1);
-    return { rowCount: 1 };
-  }
-
-  if (sql.startsWith('INSERT INTO agents')) {
-    const id = crypto.randomUUID();
-    const newAgent = {
-      id,
-      user_id: params[0],
-      wallet_address: params[1],
-      status: params[2] || 'approved',
-      country: params[3] || 'NG',
-      created_at: new Date(),
-      approved_at: new Date()
-    };
-    mockDb.agents.push(newAgent);
-    return { rows: [newAgent] };
-  }
-
-  if (sql.startsWith('SELECT * FROM agents WHERE wallet_address =')) {
-    const addr = params[0];
-    const agent = mockDb.agents.find(a => a.wallet_address === addr);
-    return { rows: agent ? [agent] : [] };
-  }
-
-  if (sql.startsWith('INSERT INTO transactions')) {
-    const id = crypto.randomUUID();
-    const newTx = {
-      id,
-      sender_id: params[0],
-      recipient_address: params[1],
-      amount: parseFloat(params[2]),
-      fee: parseFloat(params[3]),
-      asset: params[4],
-      type: params[5],
-      escrow_id: params[6] || null,
-      status: params[7] || 'pending',
-      tx_hash: params[8] || null,
-      created_at: new Date(),
-      updated_at: new Date()
-    };
-    mockDb.transactions.push(newTx);
-    return { rows: [newTx] };
-  }
-
-  if (sql.startsWith('SELECT * FROM transactions WHERE sender_id =')) {
-    const sender_id = params[0];
-    const list = mockDb.transactions.filter(t => t.sender_id === sender_id);
-    return { rows: list };
-  }
-
-  if (sql.startsWith('UPDATE transactions SET status =')) {
-    // E.g. UPDATE transactions SET status = $1, tx_hash = $2 WHERE id = $3
-    const status = params[0];
-    const tx_hash = params[1];
-    const id = params[2];
-    const tx = mockDb.transactions.find(t => t.id === id || (t.escrow_id && t.escrow_id.toString() === id.toString()));
-    if (tx) {
-      tx.status = status;
-      tx.tx_hash = tx_hash;
-      tx.updated_at = new Date();
-    }
-    return { rows: tx ? [tx] : [] };
-  }
-
-  if (sql.startsWith('INSERT INTO tickets')) {
-    const id = crypto.randomUUID();
-    const newTicket = {
-      id,
-      user_id: params[0],
-      subject: params[1],
+  // 7. Insert Job
+  if (normalized.startsWith('INSERT INTO jobs')) {
+    const job = {
+      id: `j-${Math.random().toString(36).substring(2, 9)}`,
+      client_id: params[0],
+      title: params[1],
       description: params[2],
+      budget: parseFloat(params[3]),
       status: 'open',
-      created_at: new Date()
+      escrow_id: null,
+      tx_hash: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     };
-    mockDb.tickets.push(newTicket);
-    return { rows: [newTicket] };
+    mockDb.jobs.push(job);
+    return { rows: [job], rowCount: 1 };
   }
 
-  if (sql.startsWith('SELECT * FROM tickets WHERE user_id =')) {
-    const user_id = params[0];
-    const list = mockDb.tickets.filter(t => t.user_id === user_id);
-    return { rows: list };
+  // 8. Query Jobs list
+  if (normalized.startsWith('SELECT * FROM jobs') && !normalized.includes('WHERE')) {
+    return { rows: mockDb.jobs, rowCount: mockDb.jobs.length };
   }
 
-  return { rows: [] };
-};
+  // 9. Query Job by ID
+  if (normalized.startsWith('SELECT * FROM jobs WHERE id =')) {
+    const job = mockDb.jobs.find(j => j.id === params[0]);
+    return { rows: job ? [job] : [], rowCount: job ? 1 : 0 };
+  }
+
+  // 10. Assign Proposal / Accept Bid
+  if (normalized.startsWith('UPDATE jobs SET status = $1, freelancer_id = $2, escrow_id = $3 WHERE id = $4')) {
+    const status = params[0];
+    const freelancerId = params[1];
+    const escrowId = params[2];
+    const jobId = params[3];
+
+    const job = mockDb.jobs.find(j => j.id === jobId);
+    if (job) {
+      job.status = status;
+      job.freelancer_id = freelancerId;
+      job.escrow_id = escrowId;
+      job.updated_at = new Date().toISOString();
+      return { rows: [job], rowCount: 1 };
+    }
+    return { rows: [], rowCount: 0 };
+  }
+
+  // 11. Update Job status (release/refund)
+  if (normalized.startsWith('UPDATE jobs SET status = $1, tx_hash = $2 WHERE id = $3')) {
+    const status = params[0];
+    const txHash = params[1];
+    const jobId = params[2];
+
+    const job = mockDb.jobs.find(j => j.id === jobId);
+    if (job) {
+      job.status = status;
+      job.tx_hash = txHash;
+      job.updated_at = new Date().toISOString();
+      return { rows: [job], rowCount: 1 };
+    }
+    return { rows: [], rowCount: 0 };
+  }
+
+  // 12. Insert Proposal
+  if (normalized.startsWith('INSERT INTO proposals')) {
+    const prop = {
+      id: `p-${Math.random().toString(36).substring(2, 9)}`,
+      job_id: params[0],
+      freelancer_id: params[1],
+      bid_amount: parseFloat(params[2]),
+      cover_letter: params[3],
+      status: 'pending',
+      created_at: new Date().toISOString()
+    };
+    mockDb.proposals.push(prop);
+    return { rows: [prop], rowCount: 1 };
+  }
+
+  // 13. Query Proposals by Job ID
+  if (normalized.startsWith('SELECT * FROM proposals WHERE job_id =')) {
+    const filtered = mockDb.proposals.filter(p => p.job_id === params[0]);
+    return { rows: filtered, rowCount: filtered.length };
+  }
+
+  // 14. Query Proposal by ID
+  if (normalized.startsWith('SELECT * FROM proposals WHERE id =')) {
+    const prop = mockDb.proposals.find(p => p.id === params[0]);
+    return { rows: prop ? [prop] : [], rowCount: prop ? 1 : 0 };
+  }
+
+  // 15. Update Proposal status
+  if (normalized.startsWith('UPDATE proposals')) {
+    const propId = params[params.length - 1];
+    const prop = mockDb.proposals.find(p => p.id === propId);
+    if (prop) {
+      prop.status = normalized.includes("'accepted'") ? 'accepted' : 'rejected';
+      return { rows: [prop], rowCount: 1 };
+    }
+    return { rows: [], rowCount: 0 };
+  }
+
+  // 16. Query User by Wallet Address
+  if (normalized.startsWith('SELECT * FROM users WHERE wallet_address =')) {
+    const user = mockDb.users.find(u => u.wallet_address === params[0]);
+    return { rows: user ? [user] : [], rowCount: user ? 1 : 0 };
+  }
+
+  throw new Error(`Unsupported Mock SQL Query: ${normalized}`);
+}
+
+export async function query(text, params) {
+  if (pool) {
+    return pool.query(text, params);
+  }
+  return runMockQuery(text, params);
+}

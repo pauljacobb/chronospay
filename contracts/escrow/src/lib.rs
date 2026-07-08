@@ -1,241 +1,227 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env};
+use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env, Symbol};
 
+#[derive(Clone, Debug, PartialEq)]
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum EscrowStatus {
-    Pending,
-    Completed,
-    Cancelled,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Escrow {
-    pub sender: Address,
-    pub agent: Address,
-    pub amount: i128,
-    pub token: Address,
-    pub status: EscrowStatus,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DataKey {
-    Admin,
-    FeeBps,
-    FeeWallet,
-    Escrow(u64),
+pub struct Job {
+    pub client: Address,
+    pub freelancer: Option<Address>,
+    pub budget: i128,
+    pub status: u32, // 0 = Created, 1 = Assigned, 2 = Completed, 3 = Refunded
 }
 
 #[contract]
-pub struct KoraPayEscrow;
+pub struct GigFlowEscrow;
 
 #[contractimpl]
-impl KoraPayEscrow {
-    pub fn initialize(env: Env, admin: Address, fee_bps: u32, fee_wallet: Address) {
-        if env.storage().instance().has(&DataKey::Admin) {
+impl GigFlowEscrow {
+    // Save token contract address in storage
+    pub fn initialize(env: Env, admin: Address, token: Address) {
+        if env.storage().instance().has(&Symbol::new(&env, "token")) {
             panic!("already initialized");
         }
-        env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::FeeBps, &fee_bps);
-        env.storage().instance().set(&DataKey::FeeWallet, &fee_wallet);
+        env.storage().instance().set(&Symbol::new(&env, "admin"), &admin);
+        env.storage().instance().set(&Symbol::new(&env, "token"), &token);
     }
 
-    pub fn create_escrow(
-        env: Env,
-        id: u64,
-        sender: Address,
-        agent: Address,
-        amount: i128,
-        token: Address,
-    ) {
-        sender.require_auth();
+    // Client creates a job and locks budget in contract
+    pub fn create_job(env: Env, job_id: u64, client: Address, budget: i128) {
+        client.require_auth();
 
-        if env.storage().persistent().has(&DataKey::Escrow(id)) {
-            panic!("escrow ID already exists");
+        if budget <= 0 {
+            panic!("budget must be positive");
         }
 
-        if amount <= 0 {
-            panic!("amount must be positive");
+        let job_key = Symbol::new(&env, "job");
+        // Check if job already exists
+        if env.storage().persistent().has(&(job_key.clone(), job_id)) {
+            panic!("job already exists");
         }
 
-        // Lock funds in contract
-        let token_client = token::Client::new(&env, &token);
-        token_client.transfer(&sender, &env.current_contract_address(), &amount);
+        // Get token client and transfer budget to contract
+        let token_addr: Address = env.storage().instance().get(&Symbol::new(&env, "token")).unwrap();
+        let token_client = token::Client::new(&env, &token_addr);
+        token_client.transfer(&client, &env.current_contract_address(), &budget);
 
-        let escrow = Escrow {
-            sender,
-            agent,
-            amount,
-            token,
-            status: EscrowStatus::Pending,
+        // Store job details
+        let job = Job {
+            client,
+            freelancer: None,
+            budget,
+            status: 0, // Created
         };
 
-        env.storage().persistent().set(&DataKey::Escrow(id), &escrow);
+        env.storage().persistent().set(&(job_key, job_id), &job);
     }
 
-    pub fn confirm_payout(env: Env, id: u64) {
-        let mut escrow: Escrow = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Escrow(id))
-            .unwrap_or_else(|| panic!("escrow not found"));
+    // Client assigns a freelancer to a job
+    pub fn assign_freelancer(env: Env, job_id: u64, client: Address, freelancer: Address) {
+        client.require_auth();
 
-        if escrow.status != EscrowStatus::Pending {
-            panic!("escrow is not pending");
+        let job_key = Symbol::new(&env, "job");
+        let mut job: Job = env.storage().persistent().get(&(job_key.clone(), job_id)).expect("job not found");
+
+        if job.client != client {
+            panic!("unauthorized client");
         }
 
-        // Require agent signature
-        escrow.agent.require_auth();
-
-        // Calculate fee
-        let fee_bps: u32 = env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0);
-        let fee_wallet: Address = env.storage().instance().get(&DataKey::FeeWallet).unwrap();
-        
-        let fee = (escrow.amount * (fee_bps as i128)) / 10000;
-        let net_amount = escrow.amount - fee;
-
-        let token_client = token::Client::new(&env, &escrow.token);
-
-        // Distribute funds
-        if net_amount > 0 {
-            token_client.transfer(&env.current_contract_address(), &escrow.agent, &net_amount);
-        }
-        if fee > 0 {
-            token_client.transfer(&env.current_contract_address(), &fee_wallet, &fee);
+        if job.status != 0 {
+            panic!("job not in created state");
         }
 
-        escrow.status = EscrowStatus::Completed;
-        env.storage().persistent().set(&DataKey::Escrow(id), &escrow);
+        job.freelancer = Some(freelancer);
+        job.status = 1; // Assigned
+
+        env.storage().persistent().set(&(job_key, job_id), &job);
     }
 
-    pub fn cancel_escrow(env: Env, id: u64) {
-        let mut escrow: Escrow = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Escrow(id))
-            .unwrap_or_else(|| panic!("escrow not found"));
+    // Client approves work and releases locked budget to freelancer
+    pub fn release_payout(env: Env, job_id: u64, client: Address) {
+        client.require_auth();
 
-        if escrow.status != EscrowStatus::Pending {
-            panic!("escrow is not pending");
+        let job_key = Symbol::new(&env, "job");
+        let mut job: Job = env.storage().persistent().get(&(job_key.clone(), job_id)).expect("job not found");
+
+        if job.client != client {
+            panic!("unauthorized client");
         }
 
-        // Require sender signature
-        escrow.sender.require_auth();
-
-        // Refund full amount to sender
-        let token_client = token::Client::new(&env, &escrow.token);
-        token_client.transfer(&env.current_contract_address(), &escrow.sender, &escrow.amount);
-
-        escrow.status = EscrowStatus::Cancelled;
-        env.storage().persistent().set(&DataKey::Escrow(id), &escrow);
-    }
-
-    pub fn update_fee(env: Env, fee_bps: u32, fee_wallet: Address) {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
-        admin.require_auth();
-
-        if fee_bps > 10000 {
-            panic!("fee cannot exceed 100%");
+        if job.status != 1 {
+            panic!("job not in assigned state");
         }
 
-        env.storage().instance().set(&DataKey::FeeBps, &fee_bps);
-        env.storage().instance().set(&DataKey::FeeWallet, &fee_wallet);
+        let freelancer = job.freelancer.clone().expect("freelancer not assigned");
+
+        // Transfer funds from contract to freelancer
+        let token_addr: Address = env.storage().instance().get(&Symbol::new(&env, "token")).unwrap();
+        let token_client = token::Client::new(&env, &token_addr);
+        token_client.transfer(&env.current_contract_address(), &freelancer, &job.budget);
+
+        job.status = 2; // Completed
+
+        env.storage().persistent().set(&(job_key, job_id), &job);
     }
 
-    pub fn get_escrow(env: Env, id: u64) -> Escrow {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Escrow(id))
-            .unwrap_or_else(|| panic!("escrow not found"))
+    // Client refunds job budget (only if not completed/refunded already)
+    pub fn refund_job(env: Env, job_id: u64, client: Address) {
+        client.require_auth();
+
+        let job_key = Symbol::new(&env, "job");
+        let mut job: Job = env.storage().persistent().get(&(job_key.clone(), job_id)).expect("job not found");
+
+        if job.client != client {
+            panic!("unauthorized client");
+        }
+
+        if job.status >= 2 {
+            panic!("job already finalized");
+        }
+
+        // Refund funds back to client
+        let token_addr: Address = env.storage().instance().get(&Symbol::new(&env, "token")).unwrap();
+        let token_client = token::Client::new(&env, &token_addr);
+        token_client.transfer(&env.current_contract_address(), &client, &job.budget);
+
+        job.status = 3; // Refunded
+
+        env.storage().persistent().set(&(job_key, job_id), &job);
+    }
+
+    // Fetch details of a job
+    pub fn get_job(env: Env, job_id: u64) -> Option<Job> {
+        let job_key = Symbol::new(&env, "job");
+        env.storage().persistent().get(&(job_key, job_id))
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::{Env};
+    use soroban_sdk::testutils::Address as _;
+    use soroban_sdk::{Env, IntoVal};
 
     #[test]
-    fn test_escrow_flow() {
+    fn test_gig_escrow_flow() {
         let env = Env::default();
         env.mock_all_auths();
 
         let admin = Address::generate(&env);
-        let sender = Address::generate(&env);
-        let agent = Address::generate(&env);
-        let fee_wallet = Address::generate(&env);
+        let client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
 
-        // Register contract
-        let contract_id = env.register_contract(None, KoraPayEscrow);
-        let client = KoraPayEscrowClient::new(&env, &contract_id);
-
-        // Register token contract (mock native/token)
+        // Register token contract
         let token_admin = Address::generate(&env);
-        let token_id = env.register_stellar_asset_contract(token_admin.clone());
-        let token_client = token::Client::new(&env, &token_id);
-        let token_admin_client = token::StellarAssetClient::new(&env, &token_id);
+        let token_contract_id = env.register_stellar_asset_contract(token_admin.clone());
+        let token_client = token::Client::new(&env, &token_contract_id);
 
-        // Mint token to sender
-        token_admin_client.mint(&sender, &10000);
-        assert_eq!(token_client.balance(&sender), 10000);
+        // Mint some test tokens to the client
+        token_client.mint(&client, &5000);
+        assert_eq!(token_client.balance(&client), 5000);
 
-        // Initialize Escrow (2.5% Platform fee = 250 bps)
-        client.initialize(&admin, &250, &fee_wallet);
+        // Register escrow contract
+        let escrow_id = env.register_contract(None, GigFlowEscrow);
+        let escrow_client = GigFlowEscrowClient::new(&env, &escrow_id);
 
-        // Create escrow
-        client.create_escrow(&1, &sender, &agent, &5000, &token_id);
-        assert_eq!(token_client.balance(&sender), 5000);
-        assert_eq!(token_client.balance(&contract_id), 5000);
+        // Initialize contract
+        escrow_client.initialize(&admin, &token_contract_id);
 
-        // Verify status
-        let escrow = client.get_escrow(&1);
-        assert_eq!(escrow.amount, 5000);
-        assert_eq!(escrow.status, EscrowStatus::Pending);
+        // 1. Create Job (Lock budget)
+        let job_id: u64 = 101;
+        escrow_client.create_job(&job_id, &client, &2000);
 
-        // Confirm payout
-        client.confirm_payout(&1);
-        
-        // Check distributions
-        assert_eq!(token_client.balance(&agent), 4875);
-        assert_eq!(token_client.balance(&fee_wallet), 125);
-        assert_eq!(token_client.balance(&contract_id), 0);
+        // Client balance should decrease, contract balance should increase
+        assert_eq!(token_client.balance(&client), 3000);
+        assert_eq!(token_client.balance(&escrow_id), 2000);
 
-        let completed_escrow = client.get_escrow(&1);
-        assert_eq!(completed_escrow.status, EscrowStatus::Completed);
+        let job = escrow_client.get_job(&job_id).unwrap();
+        assert_eq!(job.client, client);
+        assert_eq!(job.freelancer, None);
+        assert_eq!(job.budget, 2000);
+        assert_eq!(job.status, 0); // Created
+
+        // 2. Assign Freelancer
+        escrow_client.assign_freelancer(&job_id, &client, &freelancer);
+        let job_assigned = escrow_client.get_job(&job_id).unwrap();
+        assert_eq!(job_assigned.freelancer, Some(freelancer.clone()));
+        assert_eq!(job_assigned.status, 1); // Assigned
+
+        // 3. Release Payout
+        escrow_client.release_payout(&job_id, &client);
+        assert_eq!(token_client.balance(&escrow_id), 0);
+        assert_eq!(token_client.balance(&freelancer), 2000);
+
+        let job_completed = escrow_client.get_job(&job_id).unwrap();
+        assert_eq!(job_completed.status, 2); // Completed
     }
 
     #[test]
-    fn test_cancel_flow() {
+    fn test_gig_escrow_refund() {
         let env = Env::default();
         env.mock_all_auths();
 
         let admin = Address::generate(&env);
-        let sender = Address::generate(&env);
-        let agent = Address::generate(&env);
-        let fee_wallet = Address::generate(&env);
-
-        let contract_id = env.register_contract(None, KoraPayEscrow);
-        let client = KoraPayEscrowClient::new(&env, &contract_id);
+        let client = Address::generate(&env);
 
         let token_admin = Address::generate(&env);
-        let token_id = env.register_stellar_asset_contract(token_admin.clone());
-        let token_client = token::Client::new(&env, &token_id);
-        let token_admin_client = token::StellarAssetClient::new(&env, &token_id);
+        let token_contract_id = env.register_stellar_asset_contract(token_admin.clone());
+        let token_client = token::Client::new(&env, &token_contract_id);
 
-        token_admin_client.mint(&sender, &10000);
+        token_client.mint(&client, &3000);
 
-        client.initialize(&admin, &250, &fee_wallet);
-        client.create_escrow(&1, &sender, &agent, &5000, &token_id);
+        let escrow_id = env.register_contract(None, GigFlowEscrow);
+        let escrow_client = GigFlowEscrowClient::new(&env, &escrow_id);
+        escrow_client.initialize(&admin, &token_contract_id);
 
-        // Cancel escrow
-        client.cancel_escrow(&1);
+        let job_id: u64 = 102;
+        escrow_client.create_job(&job_id, &client, &1500);
+        assert_eq!(token_client.balance(&client), 1500);
 
-        assert_eq!(token_client.balance(&sender), 10000);
-        assert_eq!(token_client.balance(&contract_id), 0);
+        // Refund job
+        escrow_client.refund_job(&job_id, &client);
+        assert_eq!(token_client.balance(&client), 3000);
+        assert_eq!(token_client.balance(&escrow_id), 0);
 
-        let cancelled_escrow = client.get_escrow(&1);
-        assert_eq!(cancelled_escrow.status, EscrowStatus::Cancelled);
+        let job = escrow_client.get_job(&job_id).unwrap();
+        assert_eq!(job.status, 3); // Refunded
     }
 }

@@ -3,8 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/auth.js';
-import walletRoutes from './routes/wallet.js';
-import paymentRoutes from './routes/payments.js';
+import jobsRoutes from './routes/jobs.js';
 
 const app = express();
 
@@ -12,30 +11,29 @@ app.use(helmet());
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
-// Global rate limiting: 100 requests per 15 minutes
+// Global Rate Limiting: 100 requests per 15 mins
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
-  message: { error: 'Too many requests, please try again after 15 minutes.' }
+  message: { error: 'Too many requests. Please try again later.' }
 });
 
-// Auth-specific rate limiting: 10 requests per 15 minutes
+// Authentication Rate Limiting: 10 requests per 15 mins
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
-  message: { error: 'Too many authentication attempts. Please try again after 15 minutes.' }
+  message: { error: 'Too many login attempts. Please try again after 15 minutes.' }
 });
 
 app.use(globalLimiter);
 
-// Register routes
+// Routes mounting
 app.use('/api/auth', authLimiter, authRoutes);
-app.use('/api/wallet', walletRoutes);
-app.use('/api', paymentRoutes);
+app.use('/api/jobs', jobsRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', service: 'KoraPay API' });
+  res.json({ status: 'OK', service: 'GigFlow API' });
 });
 
 export default app;
