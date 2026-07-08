@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - NODE_ENV=development
+      - STELLAR_NETWORK=testnet
+      - STELLAR_NETWORK_PASSPHRASE=Test SDF Network ; September 2015
+      - SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
+      - VACCINATIONS_CONTRACT_ID=CDVMTAXW7XCSHOHH23V7SOP5HET7N2GCRMXK75L62LCR6WFFY6C6Y5AX
+      - ADMIN_PUBLIC_KEY=GBADMIN12345678901234567890123456789012345678901234567890
+      - SEP10_SERVER_KEY=SDSERVERSECRETKEYEXAMPLE123456789012345678901234567890
+      - ISSUER_SECRET_KEY=SDISSUERSECRETKEYEXAMPLE123456789012345678901234567890
+      - JWT_SECRET=super_secret_jwt_key_stellarvax_2026
+      - LOG_LEVEL=info
+      - RATE_LIMIT_SEP10=10
+      - RATE_LIMIT_VERIFY=60
+    networks:
+      - stellarvax-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_BACKEND_URL=http://backend:4000
+    depends_on:
+      - backend
+    networks:
+      - stellarvax-network
+
+  python-service:
+    build:
+      context: ./python-service
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - PORT=8001
+      - BACKEND_URL=http://backend:4000
+      - ANOMALY_THRESHOLD=50
+    depends_on:
+      - backend
+    networks:
+      - stellarvax-network
+
+networks:
+  stellarvax-network:
+    name: stellarvax-network
+    driver: bridge

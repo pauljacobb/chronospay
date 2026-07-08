@@ -1,0 +1,15 @@
+graph TD
+    Client[React Frontend / Freighter Wallet] -->|1. POST /auth/sep10| Backend[Node.js Express API]
+    Backend -->|2. Challenge TX| Client
+    Client -->|3. Signed TX| Backend
+    Backend -->|4. JWT Session Token| Client
+    
+    Client -->|5. Issue Record Request| Backend
+    Backend -->|6. Mint Transaction| Soroban[Soroban Smart Contract]
+    Soroban -->|7. Emit On-Chain Events| Horizon[Stellar Ledger]
+    
+    Client -->|8. Public Verify Request| Backend
+    Backend -->|9. Simulate Contract Call| Soroban
+    
+    Python[Python Analytics Service] -->|10. Bulk Address Verification| Backend
+    Python -->|11. Query Issuer Volume / Logs| Backend
