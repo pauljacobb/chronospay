@@ -11,13 +11,13 @@ export function authenticateToken(req, res, next) {
     return res.status(401).json({ error: 'Access token required' });
   }
 
-  const jwtSecret = process.env.JWT_SECRET || 'dev_secret_key_stellarvax';
+  const jwtSecret = process.env.JWT_SECRET || 'dev_secret_key_korapay';
 
-  jwt.verify(token, jwtSecret, (err, user) => {
+  jwt.verify(token, jwtSecret, (err, decoded) => {
     if (err) {
-      return res.status(403).json({ error: 'Invalid or expired token' });
+      return res.status(401).json({ error: 'Invalid or expired token' });
     }
-    req.user = user; // user: { address, role }
+    req.user = decoded; // decoded: { id, email, role }
     next();
   });
 }

@@ -1,32 +1,22 @@
-# Dependencies
+# Dependency Directories
 node_modules/
-venv/
-.venv/
-__pycache__/
-*.pyc
-
-# Compilation Outputs
 dist/
 target/
 build/
-
-# Local Configurations & Secrets
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-*.log
 
-# IDE & Editor files
+# Logs & temporary files
+*.log
+npm-debug.log*
+
+# IDE Metadata
 .vscode/
 .idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?
 
-# OS Files
+# OS metadata
 .DS_Store
 Thumbs.db

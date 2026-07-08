@@ -1,58 +1,66 @@
 version: '3.8'
 
 services:
+  db:
+    image: postgres:15-alpine
+    container_name: korapay-db
+    restart: always
+    environment:
+      - POSTGRES_DB=cbpa_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres_password_kora_2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - korapay-db-data:/var/lib/postgresql/data
+    networks:
+      - korapay-network
+
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    container_name: korapay-backend
+    restart: always
     ports:
-      - "4000:4000"
+      - "5000:5000"
     environment:
-      - PORT=4000
+      - PORT=5000
       - NODE_ENV=development
+      - DATABASE_URL=postgresql://postgres:postgres_password_kora_2026@db:5432/cbpa_db
+      - JWT_SECRET=your_super_secret_jwt_key_here
+      - JWT_EXPIRES_IN=7d
       - STELLAR_NETWORK=testnet
-      - STELLAR_NETWORK_PASSPHRASE=Test SDF Network ; September 2015
-      - SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
-      - VACCINATIONS_CONTRACT_ID=CDVMTAXW7XCSHOHH23V7SOP5HET7N2GCRMXK75L62LCR6WFFY6C6Y5AX
+      - STELLAR_HORIZON_URL=https://horizon-testnet.stellar.org
+      - ENCRYPTION_KEY=your_32_character_encryption_key_
+      - BALANCE_CACHE_TTL_SECONDS=30
       - ADMIN_PUBLIC_KEY=GBADMIN12345678901234567890123456789012345678901234567890
       - SEP10_SERVER_KEY=SDSERVERSECRETKEYEXAMPLE123456789012345678901234567890
-      - ISSUER_SECRET_KEY=SDISSUERSECRETKEYEXAMPLE123456789012345678901234567890
-      - JWT_SECRET=super_secret_jwt_key_stellarvax_2026
-      - LOG_LEVEL=info
-      - RATE_LIMIT_SEP10=10
-      - RATE_LIMIT_VERIFY=60
+    depends_on:
+      - db
     networks:
-      - stellarvax-network
+      - korapay-network
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    container_name: korapay-frontend
+    restart: always
     ports:
       - "3000:3000"
     environment:
-      - VITE_BACKEND_URL=http://backend:4000
+      - VITE_BACKEND_URL=http://backend:5000
     depends_on:
       - backend
     networks:
-      - stellarvax-network
+      - korapay-network
 
-  python-service:
-    build:
-      context: ./python-service
-      dockerfile: Dockerfile
-    ports:
-      - "8001:8001"
-    environment:
-      - PORT=8001
-      - BACKEND_URL=http://backend:4000
-      - ANOMALY_THRESHOLD=50
-    depends_on:
-      - backend
-    networks:
-      - stellarvax-network
+volumes:
+  korapay-db-data:
+    name: korapay-db-data
 
 networks:
-  stellarvax-network:
-    name: stellarvax-network
+  korapay-network:
+    name: korapay-network
     driver: bridge

@@ -1,21 +1,28 @@
 {
-  "name": "stellarvax-backend",
+  "name": "korapay-backend",
   "version": "1.0.0",
   "type": "module",
-  "main": "src/app.js",
+  "main": "src/index.js",
   "scripts": {
-    "start": "node src/app.js",
-    "dev": "node src/app.js",
-    "test": "NODE_ENV=test node --test src/**/*.test.js"
+    "start": "node src/index.js",
+    "dev": "node src/index.js",
+    "test": "NODE_ENV=test node --test src/**/*.test.js",
+    "migrate": "node-pg-migrate -m migrations up",
+    "migrate:rollback": "node-pg-migrate -m migrations down"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^13.0.0",
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-rate-limit": "^7.2.0",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
+    "pg": "^8.11.5",
     "winston": "^3.13.0"
+  },
+  "devDependencies": {
+    "node-pg-migrate": "^7.0.0"
   }
 }
