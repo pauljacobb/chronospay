@@ -19,10 +19,15 @@ export default function Layout({ children, currentTab, onChangeTab }) {
       {/* Top Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--border-color)', background: 'rgba(8, 7, 18, 0.4)' }}>
         <div>
-          <h4 style={{ fontSize: '16px', fontWeight: '800', background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-purple))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            ChronosPay
-          </h4>
-          <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <h4 style={{ fontSize: '16px', fontWeight: '800', background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-purple))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: 0 }}>
+              ChronosPay
+            </h4>
+            {localStorage.getItem('chronospay_mock_api') === 'true' && (
+              <span className="badge badge-cyan" style={{ fontSize: '8px', padding: '2px 4px', textTransform: 'uppercase', borderRadius: '4px' }}>Demo Mode</span>
+            )}
+          </div>
+          <span style={{ fontSize: '10px', color: 'var(--text-secondary)', display: 'block', marginTop: '2px' }}>
             {user?.role === 'sender' ? 'Sender Portal' : 'Recipient Portal'}
           </span>
         </div>

@@ -34,9 +34,18 @@ export default function Welcome({ onNavigate }) {
         <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => onNavigate('register')}>
           Get Started
         </button>
-        <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => onNavigate('login')}>
+        <button className="btn btn-secondary" style={{ width: '100%', marginBottom: '16px' }} onClick={() => onNavigate('login')}>
           Sign In
         </button>
+
+        <div className="glass-panel" style={{ padding: '12px', margin: 0, textAlign: 'left', fontSize: '11px', lineHeight: '1.4', background: 'rgba(0, 240, 255, 0.03)', border: '1px solid rgba(0, 240, 255, 0.1)' }}>
+          <span style={{ fontWeight: '600', color: 'var(--accent-cyan)', display: 'block', marginBottom: '4px' }}>💡 Quick Demo Mode</span>
+          <div style={{ color: 'var(--text-secondary)' }}>
+            <strong>Sender account:</strong> <code>sender@chronospay.io</code><br/>
+            <strong>Recipient account:</strong> <code>recipient@chronospay.io</code><br/>
+            <strong>Password:</strong> <code>password</code> (or any)
+          </div>
+        </div>
       </div>
     </div>
   );
