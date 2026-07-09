@@ -1,21 +1,21 @@
 import React from 'react';
-import { Briefcase, ShieldAlert, Coins } from 'lucide-react';
+import { Activity, ShieldAlert, Coins } from 'lucide-react';
 
 export default function Welcome({ onNavigate }) {
   return (
     <div className="welcome-screen animate-fade-in">
       <div className="welcome-brand-section">
         <div className="welcome-logo-circle">
-          <Briefcase size={44} className="icon-send-rotate" style={{ color: 'var(--accent-purple)' }} />
+          <Activity size={44} className="icon-send-rotate" style={{ color: 'var(--accent-purple)' }} />
         </div>
-        <h1 className="welcome-title">Gig<span className="gradient-text">Flow</span></h1>
-        <p className="welcome-subtitle">Decentralized Freelance Marketplace</p>
+        <h1 className="welcome-title">Chronos<span className="gradient-text" style={{ background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-purple))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Pay</span></h1>
+        <p className="welcome-subtitle">Decentralized Real-Time Payment Streams</p>
       </div>
 
       <div className="welcome-hero-card glass-panel glass-panel-glow">
-        <h3 style={{ marginBottom: '8px' }}>Escrow Guaranteed Gigs</h3>
+        <h3 style={{ marginBottom: '8px' }}>Continuous Linear Vesting</h3>
         <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.5' }}>
-          Post contracts, bid on proposals, and secure payments in on-chain Soroban escrow contracts. Automated release upon approval.
+          Lock funds once and stream them continuously over time. Recipients can withdraw vested funds in real-time. Full sender protection with time-split cancellation.
         </p>
       </div>
 

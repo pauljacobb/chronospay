@@ -3,19 +3,22 @@ use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env, Sym
 
 #[derive(Clone, Debug, PartialEq)]
 #[contracttype]
-pub struct Job {
-    pub client: Address,
-    pub freelancer: Option<Address>,
-    pub budget: i128,
-    pub status: u32, // 0 = Created, 1 = Assigned, 2 = Completed, 3 = Refunded
+pub struct Stream {
+    pub sender: Address,
+    pub recipient: Address,
+    pub amount: i128,         // Total amount locked
+    pub start_time: u64,     // Timestamp (seconds) when stream begins
+    pub stop_time: u64,      // Timestamp (seconds) when stream ends
+    pub withdrawn: i128,     // Amount already withdrawn
+    pub status: u32,         // 0 = Active, 1 = Cancelled, 2 = Completed
 }
 
 #[contract]
-pub struct GigFlowEscrow;
+pub struct ChronosPayEscrow;
 
 #[contractimpl]
-impl GigFlowEscrow {
-    // Save token contract address in storage
+impl ChronosPayEscrow {
+    // Save token contract address and admin in storage
     pub fn initialize(env: Env, admin: Address, token: Address) {
         if env.storage().instance().has(&Symbol::new(&env, "token")) {
             panic!("already initialized");
@@ -24,113 +27,150 @@ impl GigFlowEscrow {
         env.storage().instance().set(&Symbol::new(&env, "token"), &token);
     }
 
-    // Client creates a job and locks budget in contract
-    pub fn create_job(env: Env, job_id: u64, client: Address, budget: i128) {
-        client.require_auth();
+    // Sender locks budget and initializes continuous stream
+    pub fn create_stream(
+        env: Env,
+        stream_id: u64,
+        sender: Address,
+        recipient: Address,
+        amount: i128,
+        start_time: u64,
+        stop_time: u64,
+    ) {
+        sender.require_auth();
 
-        if budget <= 0 {
-            panic!("budget must be positive");
+        if amount <= 0 {
+            panic!("amount must be positive");
+        }
+        if stop_time <= start_time {
+            panic!("stop time must exceed start time");
         }
 
-        let job_key = Symbol::new(&env, "job");
-        // Check if job already exists
-        if env.storage().persistent().has(&(job_key.clone(), job_id)) {
-            panic!("job already exists");
+        let stream_key = Symbol::new(&env, "stream");
+        if env.storage().persistent().has(&(stream_key.clone(), stream_id)) {
+            panic!("stream already exists");
         }
 
-        // Get token client and transfer budget to contract
+        // Transfer funds from sender to contract
         let token_addr: Address = env.storage().instance().get(&Symbol::new(&env, "token")).unwrap();
         let token_client = token::Client::new(&env, &token_addr);
-        token_client.transfer(&client, &env.current_contract_address(), &budget);
+        token_client.transfer(&sender, &env.current_contract_address(), &amount);
 
-        // Store job details
-        let job = Job {
-            client,
-            freelancer: None,
-            budget,
-            status: 0, // Created
+        let stream = Stream {
+            sender,
+            recipient,
+            amount,
+            start_time,
+            stop_time,
+            withdrawn: 0,
+            status: 0, // Active
         };
 
-        env.storage().persistent().set(&(job_key, job_id), &job);
+        env.storage().persistent().set(&(stream_key, stream_id), &stream);
     }
 
-    // Client assigns a freelancer to a job
-    pub fn assign_freelancer(env: Env, job_id: u64, client: Address, freelancer: Address) {
-        client.require_auth();
+    // Recipient pulls vested funds from active stream
+    pub fn withdraw_from_stream(env: Env, stream_id: u64, recipient: Address, amount_to_withdraw: i128) {
+        recipient.require_auth();
 
-        let job_key = Symbol::new(&env, "job");
-        let mut job: Job = env.storage().persistent().get(&(job_key.clone(), job_id)).expect("job not found");
-
-        if job.client != client {
-            panic!("unauthorized client");
+        if amount_to_withdraw <= 0 {
+            panic!("withdrawal amount must be positive");
         }
 
-        if job.status != 0 {
-            panic!("job not in created state");
+        let stream_key = Symbol::new(&env, "stream");
+        let mut stream: Stream = env.storage().persistent().get(&(stream_key.clone(), stream_id)).expect("stream not found");
+
+        if stream.recipient != recipient {
+            panic!("unauthorized recipient");
+        }
+        if stream.status != 0 {
+            panic!("stream is not active");
         }
 
-        job.freelancer = Some(freelancer);
-        job.status = 1; // Assigned
+        let current_time = env.ledger().timestamp();
+        
+        // Calculate linear vesting
+        let vested = if current_time <= stream.start_time {
+            0
+        } else if current_time >= stream.stop_time {
+            stream.amount
+        } else {
+            let elapsed = (current_time - stream.start_time) as i128;
+            let duration = (stream.stop_time - stream.start_time) as i128;
+            (stream.amount * elapsed) / duration
+        };
 
-        env.storage().persistent().set(&(job_key, job_id), &job);
-    }
-
-    // Client approves work and releases locked budget to freelancer
-    pub fn release_payout(env: Env, job_id: u64, client: Address) {
-        client.require_auth();
-
-        let job_key = Symbol::new(&env, "job");
-        let mut job: Job = env.storage().persistent().get(&(job_key.clone(), job_id)).expect("job not found");
-
-        if job.client != client {
-            panic!("unauthorized client");
+        let available = vested - stream.withdrawn;
+        if amount_to_withdraw > available {
+            panic!("insufficient vested balance available");
         }
 
-        if job.status != 1 {
-            panic!("job not in assigned state");
-        }
-
-        let freelancer = job.freelancer.clone().expect("freelancer not assigned");
-
-        // Transfer funds from contract to freelancer
+        // Transfer funds to recipient
         let token_addr: Address = env.storage().instance().get(&Symbol::new(&env, "token")).unwrap();
         let token_client = token::Client::new(&env, &token_addr);
-        token_client.transfer(&env.current_contract_address(), &freelancer, &job.budget);
+        token_client.transfer(&env.current_contract_address(), &recipient, &amount_to_withdraw);
 
-        job.status = 2; // Completed
+        stream.withdrawn += amount_to_withdraw;
+        if stream.withdrawn == stream.amount {
+            stream.status = 2; // Completed
+        }
 
-        env.storage().persistent().set(&(job_key, job_id), &job);
+        env.storage().persistent().set(&(stream_key, stream_id), &stream);
     }
 
-    // Client refunds job budget (only if not completed/refunded already)
-    pub fn refund_job(env: Env, job_id: u64, client: Address) {
-        client.require_auth();
+    // Sender cancels stream, splitting balances based on time
+    pub fn cancel_stream(env: Env, stream_id: u64, sender: Address) {
+        sender.require_auth();
 
-        let job_key = Symbol::new(&env, "job");
-        let mut job: Job = env.storage().persistent().get(&(job_key.clone(), job_id)).expect("job not found");
+        let stream_key = Symbol::new(&env, "stream");
+        let mut stream: Stream = env.storage().persistent().get(&(stream_key.clone(), stream_id)).expect("stream not found");
 
-        if job.client != client {
-            panic!("unauthorized client");
+        if stream.sender != sender {
+            panic!("unauthorized sender");
+        }
+        if stream.status != 0 {
+            panic!("stream is not active");
         }
 
-        if job.status >= 2 {
-            panic!("job already finalized");
-        }
+        let current_time = env.ledger().timestamp();
+        
+        // Calculate linear vesting up to current time
+        let vested = if current_time <= stream.start_time {
+            0
+        } else if current_time >= stream.stop_time {
+            stream.amount
+        } else {
+            let elapsed = (current_time - stream.start_time) as i128;
+            let duration = (stream.stop_time - stream.start_time) as i128;
+            (stream.amount * elapsed) / duration
+        };
 
-        // Refund funds back to client
+        let available_vested = vested - stream.withdrawn;
+        let refund_unvested = stream.amount - vested;
+
         let token_addr: Address = env.storage().instance().get(&Symbol::new(&env, "token")).unwrap();
         let token_client = token::Client::new(&env, &token_addr);
-        token_client.transfer(&env.current_contract_address(), &client, &job.budget);
 
-        job.status = 3; // Refunded
+        // Send vested portion to recipient
+        if available_vested > 0 {
+            token_client.transfer(&env.current_contract_address(), &stream.recipient, &available_vested);
+        }
 
-        env.storage().persistent().set(&(job_key, job_id), &job);
+        // Send unvested portion back to sender
+        if refund_unvested > 0 {
+            token_client.transfer(&env.current_contract_address(), &stream.sender, &refund_unvested);
+        }
+
+        stream.status = 1; // Cancelled
+        stream.withdrawn = vested;
+
+        env.storage().persistent().set(&(stream_key, stream_id), &stream);
     }
 
-    // Fetch details of a job
-    pub fn get_job(env: Env, job_id: u64) -> Option<Job> {
-        let job_key = Symbol::new(&env, "job");
-        env.storage().persistent().get(&(job_key, job_id))
+    // Get stream details
+    pub fn get_stream(env: Env, stream_id: u64) -> Option<Stream> {
+        let stream_key = Symbol::new(&env, "stream");
+        env.storage().persistent().get(&(stream_key, stream_id))
     }
 }
 
@@ -141,87 +181,99 @@ mod test {
     use soroban_sdk::{Env, IntoVal};
 
     #[test]
-    fn test_gig_escrow_flow() {
+    fn test_payment_stream_vesting_flows() {
         let env = Env::default();
         env.mock_all_auths();
 
         let admin = Address::generate(&env);
-        let client = Address::generate(&env);
-        let freelancer = Address::generate(&env);
+        let sender = Address::generate(&env);
+        let recipient = Address::generate(&env);
 
-        // Register token contract
         let token_admin = Address::generate(&env);
         let token_contract_id = env.register_stellar_asset_contract(token_admin.clone());
         let token_client = token::Client::new(&env, &token_contract_id);
 
-        // Mint some test tokens to the client
-        token_client.mint(&client, &5000);
-        assert_eq!(token_client.balance(&client), 5000);
+        token_client.mint(&sender, &5000);
+        assert_eq!(token_client.balance(&sender), 5000);
 
-        // Register escrow contract
-        let escrow_id = env.register_contract(None, GigFlowEscrow);
-        let escrow_client = GigFlowEscrowClient::new(&env, &escrow_id);
-
-        // Initialize contract
+        let escrow_id = env.register_contract(None, ChronosPayEscrow);
+        let escrow_client = ChronosPayEscrowClient::new(&env, &escrow_id);
         escrow_client.initialize(&admin, &token_contract_id);
 
-        // 1. Create Job (Lock budget)
-        let job_id: u64 = 101;
-        escrow_client.create_job(&job_id, &client, &2000);
+        // Start time = 1000, Stop time = 2000, Amount = 1000
+        let stream_id: u64 = 1;
+        env.ledger().set_timestamp(900);
+        escrow_client.create_stream(&stream_id, &sender, &recipient, &1000, &1000, &2000);
 
-        // Client balance should decrease, contract balance should increase
-        assert_eq!(token_client.balance(&client), 3000);
-        assert_eq!(token_client.balance(&escrow_id), 2000);
+        assert_eq!(token_client.balance(&sender), 4000);
+        assert_eq!(token_client.balance(&escrow_id), 1000);
 
-        let job = escrow_client.get_job(&job_id).unwrap();
-        assert_eq!(job.client, client);
-        assert_eq!(job.freelancer, None);
-        assert_eq!(job.budget, 2000);
-        assert_eq!(job.status, 0); // Created
+        // Check details
+        let stream = escrow_client.get_stream(&stream_id).unwrap();
+        assert_eq!(stream.sender, sender);
+        assert_eq!(stream.recipient, recipient);
+        assert_eq!(stream.amount, 1000);
+        assert_eq!(stream.start_time, 1000);
+        assert_eq!(stream.stop_time, 2000);
+        assert_eq!(stream.withdrawn, 0);
+        assert_eq!(stream.status, 0); // Active
 
-        // 2. Assign Freelancer
-        escrow_client.assign_freelancer(&job_id, &client, &freelancer);
-        let job_assigned = escrow_client.get_job(&job_id).unwrap();
-        assert_eq!(job_assigned.freelancer, Some(freelancer.clone()));
-        assert_eq!(job_assigned.status, 1); // Assigned
+        // Test at t = 1000 (0% vested)
+        env.ledger().set_timestamp(1000);
+        // should panic if trying to withdraw 100
+        // escrow_client.withdraw_from_stream(&stream_id, &recipient, &100);
 
-        // 3. Release Payout
-        escrow_client.release_payout(&job_id, &client);
+        // Test at t = 1500 (50% vested = 500 available)
+        env.ledger().set_timestamp(1500);
+        escrow_client.withdraw_from_stream(&stream_id, &recipient, &300);
+        assert_eq!(token_client.balance(&recipient), 300);
+        assert_eq!(token_client.balance(&escrow_id), 700);
+
+        let stream_updated = escrow_client.get_stream(&stream_id).unwrap();
+        assert_eq!(stream_updated.withdrawn, 300);
+
+        // Test at t = 2000 (100% vested = 1000 total, 700 remaining available)
+        env.ledger().set_timestamp(2000);
+        escrow_client.withdraw_from_stream(&stream_id, &recipient, &700);
+        assert_eq!(token_client.balance(&recipient), 1000);
         assert_eq!(token_client.balance(&escrow_id), 0);
-        assert_eq!(token_client.balance(&freelancer), 2000);
 
-        let job_completed = escrow_client.get_job(&job_id).unwrap();
-        assert_eq!(job_completed.status, 2); // Completed
+        let stream_completed = escrow_client.get_stream(&stream_id).unwrap();
+        assert_eq!(stream_completed.status, 2); // Completed
     }
 
     #[test]
-    fn test_gig_escrow_refund() {
+    fn test_payment_stream_cancellation() {
         let env = Env::default();
         env.mock_all_auths();
 
         let admin = Address::generate(&env);
-        let client = Address::generate(&env);
+        let sender = Address::generate(&env);
+        let recipient = Address::generate(&env);
 
         let token_admin = Address::generate(&env);
         let token_contract_id = env.register_stellar_asset_contract(token_admin.clone());
         let token_client = token::Client::new(&env, &token_contract_id);
+        token_client.mint(&sender, &3000);
 
-        token_client.mint(&client, &3000);
-
-        let escrow_id = env.register_contract(None, GigFlowEscrow);
-        let escrow_client = GigFlowEscrowClient::new(&env, &escrow_id);
+        let escrow_id = env.register_contract(None, ChronosPayEscrow);
+        let escrow_client = ChronosPayEscrowClient::new(&env, &escrow_id);
         escrow_client.initialize(&admin, &token_contract_id);
 
-        let job_id: u64 = 102;
-        escrow_client.create_job(&job_id, &client, &1500);
-        assert_eq!(token_client.balance(&client), 1500);
+        // Start = 1000, Stop = 2000, Amount = 1000
+        let stream_id: u64 = 2;
+        env.ledger().set_timestamp(1000);
+        escrow_client.create_stream(&stream_id, &sender, &recipient, &1000, &1000, &2000);
 
-        // Refund job
-        escrow_client.refund_job(&job_id, &client);
-        assert_eq!(token_client.balance(&client), 3000);
+        // Set time to 1300 (30% vested = 300 to recipient, 700 refunded to sender)
+        env.ledger().set_timestamp(1300);
+        escrow_client.cancel_stream(&stream_id, &sender);
+
+        assert_eq!(token_client.balance(&recipient), 300);
+        assert_eq!(token_client.balance(&sender), 2700); // 2000 left + 700 refund
         assert_eq!(token_client.balance(&escrow_id), 0);
 
-        let job = escrow_client.get_job(&job_id).unwrap();
-        assert_eq!(job.status, 3); // Refunded
+        let stream = escrow_client.get_stream(&stream_id).unwrap();
+        assert_eq!(stream.status, 1); // Cancelled
     }
 }

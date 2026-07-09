@@ -9,7 +9,6 @@ const logger = winston.createLogger({
 
 const ALGORITHM = 'aes-256-cbc';
 
-// In-memory balance cache
 const balanceCache = new Map();
 const cacheTTL = (parseInt(process.env.BALANCE_CACHE_TTL_SECONDS) || 30) * 1000;
 const mockBalances = new Map();
@@ -54,7 +53,6 @@ export async function fundTestnetAccount(publicKey) {
   } catch (error) {
     logger.warn(`Friendbot offline. Setting mock balances for: ${publicKey}`);
   }
-  // Setup standard freelancer/client balances
   mockBalances.set(publicKey, [
     { asset_type: 'native', balance: '10000.0000000', code: 'XLM' }
   ]);
@@ -83,7 +81,7 @@ export async function getBalances(publicKey) {
   } catch (error) {
     logger.warn(`Stellar Horizon failed for ${publicKey}, falling back to mock balances.`);
     return mockBalances.get(publicKey) || [
-      { asset_type: 'native', balance: '500.0000000', code: 'XLM' }
+      { asset_type: 'native', balance: '10000.0000000', code: 'XLM' }
     ];
   }
 }
@@ -120,8 +118,7 @@ export async function submitEscrowDeposit(senderSecret, amount) {
     const response = await server.submitTransaction(tx);
     return response.hash;
   } catch (error) {
-    logger.warn(`Stellar transaction simulated locally.`);
-    // Deduct mock balance
+    logger.warn(`Stellar stream transaction simulated locally.`);
     const current = mockBalances.get(senderPub) || [{ asset_type: 'native', balance: '10000.0000000', code: 'XLM' }];
     const xlm = current.find(a => a.code === 'XLM');
     if (xlm) {
@@ -138,7 +135,6 @@ export async function releaseEscrowPayout(recipientAddress, amount) {
   invalidateBalanceCache(recipientAddress);
   
   try {
-    // Platform releases the payout to the freelancer
     const adminSecret = process.env.ADMIN_SECRET_KEY || 'SDSERVERSECRETKEYEXAMPLE123456789012345678901234567890';
     const adminKeypair = Keypair.fromSecret(adminSecret);
     const adminPub = adminKeypair.publicKey();
@@ -164,7 +160,7 @@ export async function releaseEscrowPayout(recipientAddress, amount) {
     return response.hash;
   } catch (error) {
     logger.warn(`Stellar payout release simulated locally.`);
-    const current = mockBalances.get(recipientAddress) || [{ asset_type: 'native', balance: '0.0000000', code: 'XLM' }];
+    const current = mockBalances.get(recipientAddress) || [{ asset_type: 'native', balance: '10000.0000000', code: 'XLM' }];
     const xlm = current.find(a => a.code === 'XLM');
     if (xlm) {
       xlm.balance = (parseFloat(xlm.balance) + parseFloat(amount)).toFixed(7);

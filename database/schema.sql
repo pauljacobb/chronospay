@@ -7,38 +7,37 @@ CREATE TABLE IF NOT EXISTS users (
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    role VARCHAR(20) DEFAULT 'client' CHECK (role IN ('client', 'freelancer', 'admin')),
+    role VARCHAR(20) DEFAULT 'sender' CHECK (role IN ('sender', 'recipient', 'admin')),
     wallet_address VARCHAR(56) UNIQUE,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- Jobs Table (Escrow protected gig listings)
-CREATE TABLE IF NOT EXISTS jobs (
+-- Streams Table (Linear Payment Escrows)
+CREATE TABLE IF NOT EXISTS streams (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    client_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    freelancer_id UUID REFERENCES users(id) ON DELETE SET NULL,
-    title VARCHAR(255) NOT NULL,
-    description TEXT NOT NULL,
-    budget NUMERIC(20, 7) NOT NULL,
-    status VARCHAR(20) DEFAULT 'open' CHECK (status IN ('open', 'assigned', 'completed', 'refunded')),
+    sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    recipient_address VARCHAR(56) NOT NULL,
+    amount NUMERIC(20, 7) NOT NULL,
+    start_time TIMESTAMPTZ NOT NULL,
+    stop_time TIMESTAMPTZ NOT NULL,
+    status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'cancelled', 'completed')),
+    withdrawn NUMERIC(20, 7) DEFAULT 0.0,
     escrow_id BIGINT UNIQUE,
     tx_hash VARCHAR(64) UNIQUE,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- Proposals Table (Freelancer applications)
-CREATE TABLE IF NOT EXISTS proposals (
+-- Withdrawals Table (Recipient pulls)
+CREATE TABLE IF NOT EXISTS withdrawals (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-    freelancer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    bid_amount NUMERIC(20, 7) NOT NULL,
-    cover_letter TEXT NOT NULL,
-    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected')),
+    stream_id UUID NOT NULL REFERENCES streams(id) ON DELETE CASCADE,
+    amount NUMERIC(20, 7) NOT NULL,
+    tx_hash VARCHAR(64) UNIQUE,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- Custodial Wallets Backup Table
+-- Wallets Table
 CREATE TABLE IF NOT EXISTS wallets (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
@@ -48,9 +47,8 @@ CREATE TABLE IF NOT EXISTS wallets (
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- Constraints
+-- Indexes
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email);
-CREATE INDEX IF NOT EXISTS idx_jobs_client ON jobs(client_id);
-CREATE INDEX IF NOT EXISTS idx_jobs_freelancer ON jobs(freelancer_id);
-CREATE INDEX IF NOT EXISTS idx_proposals_job ON proposals(job_id);
-CREATE INDEX IF NOT EXISTS idx_proposals_freelancer ON proposals(freelancer_id);
+CREATE INDEX IF NOT EXISTS idx_streams_sender ON streams(sender_id);
+CREATE INDEX IF NOT EXISTS idx_streams_recipient ON streams(recipient_address);
+CREATE INDEX IF NOT EXISTS idx_withdrawals_stream ON withdrawals(stream_id);

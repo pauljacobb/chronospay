@@ -1,4 +1,4 @@
-# Contributing to GigFlow
+# Contributing to ChronosPay
 
 We love open-source contributions! Whether you want to improve smart contracts, enhance the user interface, or write tests, this guide will help you get started.
 

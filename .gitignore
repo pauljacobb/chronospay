@@ -1,22 +1,27 @@
-# Dependency Directories
+# Node modules
 node_modules/
+
+# Production builds
 dist/
-target/
 build/
+target/
+
+# Local env files
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# Logs & temporary files
-*.log
-npm-debug.log*
-
-# IDE Metadata
-.vscode/
+# IDE configurations
 .idea/
+.vscode/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
+*.swp
 
-# OS metadata
+# OS files
 .DS_Store
 Thumbs.db

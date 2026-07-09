@@ -3,32 +3,32 @@ version: '3.8'
 services:
   db:
     image: postgres:15-alpine
-    container_name: gigflow-db
+    container_name: chronospay-db
     restart: always
     environment:
-      - POSTGRES_DB=gigflow_db
+      - POSTGRES_DB=chronospay_db
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres_password_gig_2026
+      - POSTGRES_PASSWORD=postgres_password_chronos_2026
     ports:
       - "5432:5432"
     volumes:
-      - gigflow-db-data:/var/lib/postgresql/data
+      - chronospay-db-data:/var/lib/postgresql/data
     networks:
-      - gigflow-network
+      - chronospay-network
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: gigflow-backend
+    container_name: chronospay-backend
     restart: always
     ports:
       - "4000:4000"
     environment:
       - PORT=4000
       - NODE_ENV=development
-      - DATABASE_URL=postgresql://postgres:postgres_password_gig_2026@db:5432/gigflow_db
-      - JWT_SECRET=your_super_secret_jwt_key_here
+      - DATABASE_URL=postgresql://postgres:postgres_password_chronos_2026@db:5432/chronospay_db
+      - JWT_SECRET=dev_secret_key_chronospay
       - JWT_EXPIRES_IN=7d
       - STELLAR_NETWORK=testnet
       - HORIZON_URL=https://horizon-testnet.stellar.org
@@ -39,13 +39,13 @@ services:
     depends_on:
       - db
     networks:
-      - gigflow-network
+      - chronospay-network
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: gigflow-frontend
+    container_name: chronospay-frontend
     restart: always
     ports:
       - "3000:3000"
@@ -54,13 +54,13 @@ services:
     depends_on:
       - backend
     networks:
-      - gigflow-network
+      - chronospay-network
 
 volumes:
-  gigflow-db-data:
-    name: gigflow-db-data
+  chronospay-db-data:
+    name: chronospay-db-data
 
 networks:
-  gigflow-network:
-    name: gigflow-network
+  chronospay-network:
+    name: chronospay-network
     driver: bridge

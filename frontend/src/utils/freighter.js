@@ -1,8 +1,4 @@
-/**
- * Interface with Freighter extension browser wallet
- */
-
-const USE_MOCK = import.meta.env.NEXT_PUBLIC_USE_CONTRACT_MOCK === 'true' || true;
+const USE_MOCK = true;
 
 export async function isFreighterInstalled() {
   if (USE_MOCK) return true;

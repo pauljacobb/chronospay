@@ -1,7 +1,7 @@
 {
-  "name": "gigflow-backend",
+  "name": "chronospay-backend",
   "version": "1.0.0",
-  "description": "Backend API for GigFlow freelancer marketplace",
+  "description": "Backend API for ChronosPay real-time payment streaming",
   "main": "src/index.js",
   "type": "module",
   "scripts": {

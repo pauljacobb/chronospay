@@ -1,106 +1,82 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Mail, Lock, ArrowLeft } from 'lucide-react';
+import { LogIn, ArrowLeft } from 'lucide-react';
 
 export default function Login({ onNavigate }) {
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const { login, loading } = useAuth();
-
-  const handleLogin = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setErrorMsg('');
-
-    try {
-      const success = await login(email, password);
-      if (!success) {
-        setErrorMsg('Invalid email or password combination.');
-      }
-    } catch (err) {
-      setErrorMsg(err.message || 'Error occurred.');
+    if (!email || !password) {
+      return setError('Please enter both email and password.');
     }
-  };
-
-  const autofill = (role) => {
-    if (role === 'client') {
-      setEmail('client@gigflow.com');
-      setPassword('password123');
-    } else {
-      setEmail('freelancer@gigflow.com');
-      setPassword('password123');
+    setError('');
+    setLoading(true);
+    try {
+      await login(email, password);
+      onNavigate('dashboard');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Authentication failed. Please check credentials.');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="auth-screen animate-fade-in">
-      <div className="auth-header">
-        <button className="auth-back-btn" onClick={() => onNavigate('welcome')}>
-          <ArrowLeft size={16} />
-        </button>
-        <h2>Welcome Back</h2>
-        <p>Sign in to access your gig contracts</p>
-      </div>
-
-      <form onSubmit={handleLogin} className="auth-form-card glass-panel">
-        {errorMsg && <div className="form-error-panel">{errorMsg}</div>}
-
-        <div className="form-group">
-          <label className="form-label">Email Address</label>
-          <div className="input-with-icon">
-            <Mail className="input-icon-element" size={16} />
-            <input
-              type="email"
-              className="form-input icon-indent"
-              placeholder="email@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              disabled={loading}
-            />
-          </div>
+    <div className="login-screen animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '28px', marginTop: '10px' }}>
+          <button onClick={() => onNavigate('welcome')} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+            <ArrowLeft size={20} />
+          </button>
+          <h2 style={{ marginLeft: '12px', fontSize: '20px' }}>Sign In</h2>
         </div>
 
-        <div className="form-group">
-          <label className="form-label">Password</label>
-          <div className="input-with-icon">
-            <Lock className="input-icon-element" size={16} />
+        <form onSubmit={handleSubmit}>
+          {error && (
+            <div style={{ background: 'rgba(255, 62, 62, 0.1)', border: '1px solid rgba(255, 62, 62, 0.2)', padding: '12px', borderRadius: '10px', color: 'var(--accent-red)', fontSize: '13px', marginBottom: '20px' }}>
+              {error}
+            </div>
+          )}
+
+          <div className="form-group">
+            <label>Email Address</label>
+            <input
+              type="email"
+              className="input-field"
+              placeholder="name@chronospay.io"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Password</label>
             <input
               type="password"
-              className="form-input icon-indent"
+              className="input-field"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              required
-              disabled={loading}
             />
           </div>
-        </div>
 
-        <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }} disabled={loading}>
-          {loading ? <span className="loader" style={{ width: '16px', height: '16px' }}></span> : 'Sign In'}
-        </button>
-      </form>
-
-      <div className="glass-panel demo-quickfill-card" style={{ marginTop: '20px', padding: '12px' }}>
-        <h4 style={{ fontSize: '11px', marginBottom: '8px', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Demo Sandbox Quick Fill</h4>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="btn btn-secondary" style={{ fontSize: '11px', padding: '6px 12px', flex: 1 }} onClick={() => autofill('client')}>
-            Client
+          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '10px' }} disabled={loading}>
+            {loading ? 'Signing In...' : <><LogIn size={18} /> Sign In</>}
           </button>
-          <button className="btn btn-secondary" style={{ fontSize: '11px', padding: '6px 12px', flex: 1 }} onClick={() => autofill('freelancer')}>
-            Freelancer
-          </button>
-        </div>
+        </form>
       </div>
 
-      <p className="auth-footer-link" style={{ marginTop: '20px' }}>
+      <div style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '20px' }}>
         Don't have an account?{' '}
-        <span onClick={() => onNavigate('register')} style={{ color: 'var(--accent-purple)', cursor: 'pointer', fontWeight: 'bold' }}>
+        <span onClick={() => onNavigate('register')} style={{ color: 'var(--accent-cyan)', cursor: 'pointer', fontWeight: '600' }}>
           Sign Up
         </span>
-      </p>
+      </div>
     </div>
   );
 }

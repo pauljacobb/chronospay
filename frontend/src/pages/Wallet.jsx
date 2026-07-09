@@ -1,31 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import api from '../utils/api';
-import { Copy, ClipboardCheck, QrCode } from 'lucide-react';
+import { Copy, ClipboardCheck, Smartphone } from 'lucide-react';
 
 export default function Wallet() {
-  const { user, demoMode } = useAuth();
+  const { user, balance } = useAuth();
   const [copied, setCopied] = useState(false);
-  const [balance, setBalance] = useState('0.0000');
-  const [loading, setLoading] = useState(true);
-
-  const loadBalance = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get('/wallet/balance');
-      const xlm = res.data.balances.find(b => b.code === 'XLM');
-      setBalance(parseFloat(xlm?.balance || 0).toFixed(4));
-    } catch (err) {
-      console.warn("REST API offline, simulating balance.");
-      setBalance('10000.0000');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadBalance();
-  }, []);
 
   const handleCopy = () => {
     if (user?.wallet_address) {
@@ -45,9 +24,9 @@ export default function Wallet() {
       <div className="dashboard-header-card glass-panel" style={{ borderLeft: '4px solid var(--accent-cyan)' }}>
         <div className="header-meta">
           <span className="badge badge-cyan">Wallet Ledger</span>
-          <h2>My Freighter Key</h2>
+          <h2>My Stellar Key</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '4px' }}>
-            Check balances or share address to receive freelancer transfers.
+            Check balances or share address to receive continuous payment streams.
           </p>
         </div>
       </div>
@@ -76,16 +55,16 @@ export default function Wallet() {
         </div>
 
         <h3 className="qr-title-tag" style={{ marginTop: '24px', fontSize: '18px' }}>
-          {loading ? '...' : `${balance} XLM`}
+          {balance} XLM
         </h3>
         <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '4px' }}>
-          Stellar Network Balance {demoMode && '(Mock)'}
+          Stellar Testnet Balance
         </p>
 
-        <div className="wallet-copy-pill" style={{ marginTop: '24px', width: '100%', justifyContent: 'space-between', padding: '10px 16px' }} onClick={handleCopy}>
+        <div className="wallet-copy-pill" style={{ marginTop: '24px', width: '100%', justifyContent: 'space-between', padding: '10px 16px', position: 'relative' }} onClick={handleCopy}>
           <code style={{ fontSize: '12px' }}>{user?.wallet_address ? truncateAddress(user.wallet_address) : 'No Public Key'}</code>
           {copied ? <ClipboardCheck size={16} style={{ color: 'var(--accent-green)' }} /> : <Copy size={15} />}
-          {copied && <span className="pill-tooltip">Copied Address!</span>}
+          {copied && <span className="pill-tooltip">Copied!</span>}
         </div>
       </div>
     </div>

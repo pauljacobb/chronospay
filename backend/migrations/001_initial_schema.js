@@ -4,32 +4,31 @@ export function up(pgm) {
     name: { type: 'varchar(255)', notNull: true },
     email: { type: 'varchar(255)', notNull: true, unique: true },
     password_hash: { type: 'varchar(255)', notNull: true },
-    role: { type: 'varchar(20)', default: 'client' },
+    role: { type: 'varchar(20)', default: 'sender' },
     wallet_address: { type: 'varchar(56)', unique: true },
     created_at: { type: 'timestamptz', default: pgm.func('CURRENT_TIMESTAMP') }
   });
 
-  pgm.createTable('jobs', {
+  pgm.createTable('streams', {
     id: { type: 'uuid', primaryKey: true, default: pgm.func('gen_random_uuid()') },
-    client_id: { type: 'uuid', notNull: true, references: 'users', onDelete: 'cascade' },
-    freelancer_id: { type: 'uuid', references: 'users', onDelete: 'set null' },
-    title: { type: 'varchar(255)', notNull: true },
-    description: { type: 'text', notNull: true },
-    budget: { type: 'numeric(20,7)', notNull: true },
-    status: { type: 'varchar(20)', default: 'open' },
+    sender_id: { type: 'uuid', notNull: true, references: 'users', onDelete: 'cascade' },
+    recipient_address: { type: 'varchar(56)', notNull: true },
+    amount: { type: 'numeric(20,7)', notNull: true },
+    start_time: { type: 'timestamptz', notNull: true },
+    stop_time: { type: 'timestamptz', notNull: true },
+    status: { type: 'varchar(20)', default: 'active' },
+    withdrawn: { type: 'numeric(20,7)', default: 0.0 },
     escrow_id: { type: 'bigint', unique: true },
     tx_hash: { type: 'varchar(64)', unique: true },
     created_at: { type: 'timestamptz', default: pgm.func('CURRENT_TIMESTAMP') },
     updated_at: { type: 'timestamptz', default: pgm.func('CURRENT_TIMESTAMP') }
   });
 
-  pgm.createTable('proposals', {
+  pgm.createTable('withdrawals', {
     id: { type: 'uuid', primaryKey: true, default: pgm.func('gen_random_uuid()') },
-    job_id: { type: 'uuid', notNull: true, references: 'jobs', onDelete: 'cascade' },
-    freelancer_id: { type: 'uuid', notNull: true, references: 'users', onDelete: 'cascade' },
-    bid_amount: { type: 'numeric(20,7)', notNull: true },
-    cover_letter: { type: 'text', notNull: true },
-    status: { type: 'varchar(20)', default: 'pending' },
+    stream_id: { type: 'uuid', notNull: true, references: 'streams', onDelete: 'cascade' },
+    amount: { type: 'numeric(20,7)', notNull: true },
+    tx_hash: { type: 'varchar(64)', unique: true },
     created_at: { type: 'timestamptz', default: pgm.func('CURRENT_TIMESTAMP') }
   });
 
@@ -44,15 +43,14 @@ export function up(pgm) {
 
   // Indexes
   pgm.createIndex('users', 'email');
-  pgm.createIndex('jobs', 'client_id');
-  pgm.createIndex('jobs', 'freelancer_id');
-  pgm.createIndex('proposals', 'job_id');
-  pgm.createIndex('proposals', 'freelancer_id');
+  pgm.createIndex('streams', 'sender_id');
+  pgm.createIndex('streams', 'recipient_address');
+  pgm.createIndex('withdrawals', 'stream_id');
 }
 
 export function down(pgm) {
   pgm.dropTable('wallets');
-  pgm.dropTable('proposals');
-  pgm.dropTable('jobs');
+  pgm.dropTable('withdrawals');
+  pgm.dropTable('streams');
   pgm.dropTable('users');
 }

@@ -1,101 +1,71 @@
-# GigFlow — Decentralized Freelance Marketplace
+# ChronosPay - Decentralized Real-Time Payment Streams
 
-[![CI](https://github.com/pauljacobb/gigflow/actions/workflows/ci.yml/badge.svg)](https://github.com/pauljacobb/gigflow/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](file:///workspaces/STELLARR/LICENSE)
+ChronosPay is a continuous real-time linear vesting and payment streaming protocol built on the Stellar Soroban smart contract network. It allows senders to lock up funds in escrow and distribute them continuously over time to a recipient, who can withdraw their vested funds at any second.
 
-GigFlow is an open-source decentralized freelance marketplace where clients post jobs, freelancers apply, and payments are secured in Soroban smart contract escrows — released automatically when work is approved. No middlemen. No payment delays. No platform fees eating your earnings.
 
----
+## 🌟 Core Features
 
-## 🌟 Key Features
-
-- **Freighter Wallet Integration**: Connect and authenticate securely using the Freighter browser wallet keypairs.
-- **Escrow Guaranteed Budgets**: Clients deposit XLM budgets into a Soroban smart contract when posting contracts or hiring freelancers.
-- **Role-Based Workflows**: Tailored client/freelancer dashboards for posting contracts, checking proposals, and approving work.
-- **Instantly Released Payments**: Client work approval triggers direct transfers from the escrow contract to the freelancer's wallet.
-- **Zero Fees & Middlemen**: Remittance occurs directly between client and freelancer keys.
-- **Offline Mock Development sandbox**: Run the entire web application locally with mock contract actions logged to the browser console. No networks or wallet extensions required!
+- **Continuous Linear Vesting**: Escrows stream funds per second based on the ledger timestamp.
+- **Recipient Pull-Based Withdrawals**: Recipients claim any vested funds directly from the contract.
+- **Time-Split Cancellations**: Senders can cancel active streams at any point. Vested portion goes to the recipient, unvested is instantly refunded.
+- **Stellar Horizon / Friendbot Support**: Simulated locally or integrated directly with testnet Horizon Horizon clients.
+- **Premium User Interface**: Mobile-first glassmorphic UI shell built in React with live count-up tickers.
 
 ---
 
-## 🏗️ Architecture & Project Structure
+## 🛠️ Architecture & Tech Stack
 
-### Key Source References
-- **Escrow Soroban Contract**: [contracts/escrow/src/lib.rs](file:///workspaces/STELLARR/contracts/escrow/src/lib.rs)
-- **Database Schema**: [database/schema.sql](file:///workspaces/STELLARR/database/schema.sql)
-- **Database Migration**: [backend/migrations/001_initial_schema.js](file:///workspaces/STELLARR/backend/migrations/001_initial_schema.js)
-- **Wallet Auth Controller**: [backend/src/controllers/authController.js](file:///workspaces/STELLARR/backend/src/controllers/authController.js)
-- **Job Escrow Controller**: [backend/src/controllers/jobController.js](file:///workspaces/STELLARR/backend/src/controllers/jobController.js) (Deposits, releases, and refunds)
-- **Stellar Horizon Service**: [backend/src/services/stellar.js](file:///workspaces/STELLARR/backend/src/services/stellar.js)
-- **Backend API Routes**: [backend/src/routes/jobs.js](file:///workspaces/STELLARR/backend/src/routes/jobs.js)
-- **Vite Config & API Proxy**: [frontend/vite.config.js](file:///workspaces/STELLARR/frontend/vite.config.js)
-- **Marketplace Dashboard React Page**: [frontend/src/pages/Dashboard.jsx](file:///workspaces/STELLARR/frontend/src/pages/Dashboard.jsx)
-- **Gig Escrow Control React Page**: [frontend/src/pages/JobDetails.jsx](file:///workspaces/STELLARR/frontend/src/pages/JobDetails.jsx)
-- **Post Job Escrow React Page**: [frontend/src/pages/PostJob.jsx](file:///workspaces/STELLARR/frontend/src/pages/PostJob.jsx)
-
----
-
-## 🛠️ Quick Start
-
-### 1. Database Setup
-Create database in PostgreSQL:
-```bash
-psql -U postgres -c "CREATE DATABASE gigflow_db;"
+```mermaid
+graph TD
+    Client[React + Vite Frontend] -->|API Requests| Backend[Node.js + Express API]
+    Backend -->|Mock DB / PostgreSQL| Postgres[(Database)]
+    Backend -->|Stellar SDK / Horizon| Horizon[Stellar Horizon Network]
+    Horizon -->|Vesting Escrows| Soroban[Soroban Smart Contracts]
 ```
 
-### 2. Configure Environment
-Copy the environment template:
+### 📦 Project Structure
+
+- [contracts/](file:///workspaces/STELLARR/contracts/) - Soroban smart contracts (`ChronosPayEscrow`) written in Rust.
+- [backend/](file:///workspaces/STELLARR/backend/) - Node.js Express API and backend tests.
+- [frontend/](file:///workspaces/STELLARR/frontend/) - Vite + React mobile-first simulated interface.
+- [database/](file:///workspaces/STELLARR/database/) - Schema definitions for PostgreSQL databases.
+
+---
+
+## 🚀 Running the Project
+
+### 1. Set Up Environment Variables
+
+Copy the example template to create your `.env` file:
 ```bash
 cp .env.example .env
 ```
 
-### 3. Run migrations
+### 2. Run the Backend API
+
+Install dependencies and start the backend:
 ```bash
 cd backend
-npm run migrate
+npm install
+npm run dev
 ```
+*Note: The backend will automatically fall back to an in-memory mock database if `DATABASE_URL` is omitted.*
 
-### 4. Run Locally (Dev Servers)
-- **Backend API**: `cd backend && npm install && npm run dev` (starts on port 4000)
-- **Frontend App**: `cd frontend && npm install && npm run dev` (starts on port 3000)
+### 3. Run the Frontend Interface
 
-### 5. Running with Docker Compose (Recommended)
-Build and run the entire multi-service stack (PostgreSQL + Express API + React Frontend):
+Install dependencies and start the frontend dev server:
 ```bash
-docker compose up --build
+cd frontend
+npm install
+npm run dev
 ```
-- **Web App URL**: `http://localhost:3000`
-- **Backend API URL**: `http://localhost:4000`
 
----
+Open [http://localhost:3000](http://localhost:3000) in your browser to view the client.
 
-## 🧪 Offline Development with Contract Mock
+### 🧪 Run Tests
 
-For frontend development without a deployed Soroban contract:
-1. Enable mock mode in frontend environment variables.
-2. Start the frontend: `npm run dev`.
-3. What works offline:
-   - Job creation with simulated escrow locking.
-   - Proposals, bids, and freelancer assignments.
-   - Escrow payout releases and client refunds.
-   - All contract operations logged to the browser console.
-
----
-
-## 🧪 Testing
-
-### Soroban Escrow Contract Tests (Rust)
+To run the API integration test suite:
 ```bash
-cd contracts/escrow && cargo test
+cd backend
+npm test
 ```
-
-### Backend REST API Tests (Node.js)
-```bash
-cd backend && npm test
-```
-
----
-
-## 📄 License
-
-MIT © [GigFlow Contributors](file:///workspaces/STELLARR/LICENSE)

@@ -1,54 +1,77 @@
 import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import Layout from './components/Layout';
 import Welcome from './pages/Welcome';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
-import PostJob from './pages/PostJob';
+import CreateStream from './pages/CreateStream';
+import StreamDetails from './pages/StreamDetails';
 import Wallet from './pages/Wallet';
-import Profile from './pages/Profile';
+import Layout from './components/Layout';
 
 function AppContent() {
-  const { token, loading } = useAuth();
-  
-  // Navigation tabs state
-  const [activeTab, setActiveTab] = useState('dashboard');
-  
-  // Onboarding screens state (welcome, login, register)
-  const [onboardScreen, setOnboardScreen] = useState('welcome');
+  const { user, loading } = useAuth();
+  const [screen, setScreen] = useState('welcome'); // welcome, login, register, dashboard
+  const [tab, setTab] = useState('streams'); // streams, create, wallet
+  const [selectedStreamId, setSelectedStreamId] = useState(null);
 
   if (loading) {
     return (
-      <div className="mobile-shell-wrapper">
-        <div className="mobile-viewport glass-panel centered-loader-state" style={{ justifyContent: 'center', height: '100%' }}>
-          <span className="loader" style={{ width: '32px', height: '32px' }}></span>
-          <p style={{ marginTop: '16px' }}>Connecting to Freighter wallet...</p>
-        </div>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+        <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Loading ChronosPay...</div>
       </div>
     );
   }
 
-  // Not authenticated: show onboarding views
-  if (!token) {
-    return (
-      <div className="mobile-shell-wrapper">
-        <div className="mobile-viewport glass-panel onboarding-scroller">
-          {onboardScreen === 'welcome' && <Welcome onNavigate={setOnboardScreen} />}
-          {onboardScreen === 'login' && <Login onNavigate={setOnboardScreen} />}
-          {onboardScreen === 'register' && <Register onNavigate={setOnboardScreen} />}
-        </div>
-      </div>
-    );
+  // Handle routing for authenticated vs unauthenticated
+  if (!user) {
+    switch (screen) {
+      case 'login':
+        return <Login onNavigate={setScreen} />;
+      case 'register':
+        return <Register onNavigate={setScreen} />;
+      case 'welcome':
+      default:
+        return <Welcome onNavigate={setScreen} />;
+    }
   }
 
-  // Authenticated: show layout with bottom tabs
+  // Authenticated Layout Views
+  const renderTabContent = () => {
+    if (selectedStreamId) {
+      return (
+        <StreamDetails
+          streamId={selectedStreamId}
+          onBack={() => setSelectedStreamId(null)}
+        />
+      );
+    }
+
+    switch (tab) {
+      case 'create':
+        return <CreateStream onNavigate={(scr) => { setTab('streams'); setScreen(scr); }} />;
+      case 'wallet':
+        return <Wallet />;
+      case 'streams':
+      default:
+        return (
+          <Dashboard
+            onSelectStream={setSelectedStreamId}
+            onCreateTab={() => setTab('create')}
+          />
+        );
+    }
+  };
+
   return (
-    <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
-      {activeTab === 'dashboard' && <Dashboard />}
-      {activeTab === 'postjob' && <PostJob onPostSuccess={() => setActiveTab('dashboard')} />}
-      {activeTab === 'wallet' && <Wallet />}
-      {activeTab === 'profile' && <Profile />}
+    <Layout
+      currentTab={selectedStreamId ? null : tab}
+      onChangeTab={(newTab) => {
+        setSelectedStreamId(null);
+        setTab(newTab);
+      }}
+    >
+      {renderTabContent()}
     </Layout>
   );
 }
@@ -56,7 +79,11 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <div className="mobile-shell-wrapper">
+        <div className="mobile-viewport">
+          <AppContent />
+        </div>
+      </div>
     </AuthProvider>
   );
 }

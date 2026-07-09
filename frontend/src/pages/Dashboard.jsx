@@ -1,105 +1,134 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
-import { RefreshCw, Coins, Eye, CheckCircle, Shield } from 'lucide-react';
-import JobDetails from './JobDetails';
+import { useAuth } from '../context/AuthContext';
+import { Play, TrendingUp, Calendar, AlertCircle } from 'lucide-react';
 
-export default function Dashboard() {
+export default function Dashboard({ onSelectStream, onCreateTab }) {
   const { user } = useAuth();
-  const [jobs, setJobs] = useState([]);
+  const [streams, setStreams] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedJobId, setSelectedJobId] = useState(null);
+  const [error, setError] = useState('');
 
-  const fetchJobs = async () => {
+  useEffect(() => {
+    fetchStreams();
+  }, []);
+
+  const fetchStreams = async () => {
     setLoading(true);
+    setError('');
     try {
-      const res = await api.get('/jobs');
-      setJobs(res.data.jobs || []);
+      const endpoint = user?.role === 'sender' ? '/streams/sent' : '/streams/received';
+      const res = await api.get(endpoint);
+      setStreams(res.data.streams || []);
     } catch (err) {
-      console.warn("Failed to fetch jobs list from backend, using simulated contracts.");
-      setJobs([
-        { id: '1', title: 'Write Soroban Escrow Contract', description: 'Need a stable escrow contract supporting refunds and freelancer assignments. Must be written in Rust.', budget: '800', status: 'open', client_id: '123' },
-        { id: '2', title: 'Next.js Frontend Wallet Integration', description: 'Integrate Freighter wallet API into a React freelancer marketplace. Experience with Stellar SDK is required.', budget: '500', status: 'assigned', client_id: '123', escrow_id: '821431' },
-        { id: '3', title: 'Stellar Anchor Integration Support', description: 'Help configure SEP-24 deposits and withdrawals for stablecoin distributions.', budget: '2000', status: 'completed', client_id: '456', escrow_id: '720911' }
-      ]);
+      setError('Failed to fetch streams. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchJobs();
-  }, []);
+  const getStatusClass = (status) => {
+    switch (status) {
+      case 'active': return 'status-active';
+      case 'cancelled': return 'status-cancelled';
+      case 'completed': return 'status-completed';
+      default: return 'status-active';
+    }
+  };
 
-  if (selectedJobId) {
-    return <JobDetails jobId={selectedJobId} onBack={() => { setSelectedJobId(null); fetchJobs(); }} />;
-  }
+  const formatDate = (dateStr) => {
+    return new Date(dateStr).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const totalValue = streams.reduce((acc, s) => acc + parseFloat(s.amount), 0);
+  const activeStreamsCount = streams.filter(s => s.status === 'active').length;
 
   return (
-    <div className="dashboard-view animate-fade-in">
-      <div className="dashboard-header-card glass-panel" style={{ borderLeft: '4px solid var(--accent-purple)' }}>
-        <div className="header-meta">
-          <span className="badge badge-purple">Decentralized Board</span>
-          <h2>Marketplace Gigs</h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '4px' }}>
-            Find freelance gigs locked securely in Soroban escrow smart contracts.
-          </p>
+    <div className="animate-fade-in">
+      {/* Quick Stats Panel */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+        <div className="glass-panel" style={{ padding: '16px', margin: 0 }}>
+          <span style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Active Streams</span>
+          <h3 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--accent-cyan)' }}>{activeStreamsCount}</h3>
+        </div>
+        <div className="glass-panel" style={{ padding: '16px', margin: 0 }}>
+          <span style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Total Escrowed</span>
+          <h3 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--accent-green)' }}>{totalValue.toFixed(2)} XLM</h3>
         </div>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
-        <h3 className="section-title-label">Available Opportunities</h3>
-        <button className="refresh-data-btn" onClick={fetchJobs} disabled={loading}>
-          <RefreshCw size={14} className={loading ? 'icon-spin-loading' : ''} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <h3 style={{ fontSize: '16px', fontWeight: '600' }}>
+          {user?.role === 'sender' ? 'Sent Streams' : 'Received Streams'}
+        </h3>
+        <button
+          onClick={fetchStreams}
+          style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '12px', cursor: 'pointer', fontWeight: '600' }}
+        >
+          Refresh
         </button>
       </div>
 
-      {loading ? (
-        <div className="centered-loader-state">
-          <span className="loader" style={{ width: '24px', height: '24px' }}></span>
-          <p>Fetching on-chain escrows...</p>
+      {error && (
+        <div style={{ background: 'rgba(255, 62, 62, 0.1)', padding: '12px', borderRadius: '10px', color: 'var(--accent-red)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+          <AlertCircle size={16} />
+          {error}
         </div>
-      ) : jobs.length === 0 ? (
-        <div className="glass-panel" style={{ padding: '36px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-          No active freelance gigs posted yet.
+      )}
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-secondary)' }}>
+          Loading your streams...
+        </div>
+      ) : streams.length === 0 ? (
+        <div className="glass-panel glass-panel-glow" style={{ textAlign: 'center', padding: '36px 20px', marginTop: '10px' }}>
+          <Play size={40} style={{ color: 'var(--accent-purple)', marginBottom: '16px', opacity: 0.8 }} />
+          <h4 style={{ fontSize: '16px', marginBottom: '8px' }}>No Payment Streams Found</h4>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.5', marginBottom: '20px' }}>
+            {user?.role === 'sender' 
+              ? 'You have not initialized any payment streams yet. Lock some funds and start a continuous payout.'
+              : 'You have not received any payment streams yet. Share your wallet address to get started.'}
+          </p>
+          {user?.role === 'sender' && (
+            <button className="btn btn-primary" onClick={onCreateTab}>
+              Create Stream
+            </button>
+          )}
         </div>
       ) : (
-        <div className="jobs-list" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {jobs.map(job => (
-            <div key={job.id} className="glass-panel escrow-item-card" style={{
-              borderLeft: job.status === 'open' ? '3px solid var(--accent-cyan)' : (job.status === 'assigned' ? '3px solid var(--accent-purple)' : '3px solid var(--accent-green)')
-            }}>
-              <div className="escrow-meta">
+        <div className="stream-list">
+          {streams.map((stream) => (
+            <div
+              key={stream.id}
+              className="stream-card"
+              onClick={() => onSelectStream(stream.id)}
+            >
+              <div className="stream-card-header">
                 <div>
-                  <h4 style={{ fontSize: '16px' }}>{job.title}</h4>
-                  <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '280px' }}>
-                    {job.description}
-                  </p>
-                </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <h4 style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--accent-green)', fontSize: '15px' }}>
-                    <Coins size={14} />
-                    {job.budget} XLM
+                  <h4 style={{ fontSize: '14px', fontWeight: '600' }}>
+                    {user?.role === 'sender' ? 'To: ' : 'From: '}
+                    <code style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                      {user?.role === 'sender' 
+                        ? `${stream.recipient_address.substring(0, 6)}...${stream.recipient_address.substring(stream.recipient_address.length - 4)}`
+                        : `${stream.sender_id.substring(0, 8)}...`}
+                    </code>
                   </h4>
-                  <span className={`badge ${job.status === 'open' ? 'badge-cyan' : (job.status === 'assigned' ? 'badge-purple' : 'badge-green')}`} style={{ fontSize: '9px', marginTop: '4px', padding: '1px 5px' }}>
-                    {job.status}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                    <Calendar size={12} />
+                    <span>Starts {formatDate(stream.start_time)}</span>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div className="stream-amount">{stream.amount} XLM</div>
+                  <span className={`status-indicator ${getStatusClass(stream.status)}`} style={{ marginTop: '6px', display: 'inline-block' }}>
+                    {stream.status}
                   </span>
                 </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', marginTop: '12px', justifyItems: 'center', justifyContent: 'space-between', alignItems: 'center' }}>
-                {job.escrow_id && (
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Shield size={12} />
-                    Escrow ID: #{job.escrow_id}
-                  </span>
-                )}
-                {!job.escrow_id && (
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>No Escrow Active</span>
-                )}
-                <button className="btn btn-secondary" style={{ fontSize: '12px', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => setSelectedJobId(job.id)}>
-                  <Eye size={12} /> View Gig
-                </button>
               </div>
             </div>
           ))}

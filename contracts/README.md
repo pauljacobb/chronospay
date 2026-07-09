@@ -1,9 +1,9 @@
-# GigFlow Escrow Smart Contract
+# ChronosPay Escrow Smart Contract
 
-This directory contains the Soroban smart contract managing the GigFlow freelance marketplace escrow deposits, freelancer assignments, payout releases, and refunds.
+This directory contains the Soroban smart contract managing real-time linear payment streams on Stellar.
 
 ## Structure
-- `src/lib.rs`: Rust implementation of the Soroban contract, including tests.
+- `src/lib.rs`: Rust implementation of the ChronosPay contract and unit tests.
 - `Cargo.toml`: Package dependencies.
 
 ## Compile Contract

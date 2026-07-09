@@ -16,15 +16,15 @@ if (hasDbUrl && !isTest) {
     connectionString: process.env.DATABASE_URL
   });
 } else {
-  logger.warn('Using GigFlow in-memory mock database fallback.');
+  logger.warn('Using ChronosPay in-memory mock database fallback.');
 }
 
 // In-memory mock database tables
 export const mockDb = {
   users: [],
   wallets: [],
-  jobs: [],
-  proposals: []
+  streams: [],
+  withdrawals: []
 };
 
 // Simple Mock SQL Parser for Offline/Test mode
@@ -38,7 +38,7 @@ function runMockQuery(text, params) {
       name: params[0],
       email: params[1],
       password_hash: params[2],
-      role: params[3] || 'client',
+      role: params[3] || 'sender',
       wallet_address: params[4] || null,
       created_at: new Date().toISOString()
     };
@@ -84,111 +84,93 @@ function runMockQuery(text, params) {
     return { rows: wallet ? [{ public_key: wallet.public_key }] : [], rowCount: wallet ? 1 : 0 };
   }
 
-  // 7. Insert Job
-  if (normalized.startsWith('INSERT INTO jobs')) {
-    const job = {
-      id: `j-${Math.random().toString(36).substring(2, 9)}`,
-      client_id: params[0],
-      title: params[1],
-      description: params[2],
-      budget: parseFloat(params[3]),
-      status: 'open',
-      escrow_id: null,
-      tx_hash: null,
+  // 7. Insert Stream
+  if (normalized.startsWith('INSERT INTO streams')) {
+    const stream = {
+      id: `s-${Math.random().toString(36).substring(2, 9)}`,
+      sender_id: params[0],
+      recipient_address: params[1],
+      amount: parseFloat(params[2]),
+      start_time: params[3],
+      stop_time: params[4],
+      status: 'active',
+      withdrawn: 0.0,
+      escrow_id: params[5] || Math.floor(100000 + Math.random() * 900000),
+      tx_hash: params[6] || null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
-    mockDb.jobs.push(job);
-    return { rows: [job], rowCount: 1 };
+    mockDb.streams.push(stream);
+    return { rows: [stream], rowCount: 1 };
   }
 
-  // 8. Query Jobs list
-  if (normalized.startsWith('SELECT * FROM jobs') && !normalized.includes('WHERE')) {
-    return { rows: mockDb.jobs, rowCount: mockDb.jobs.length };
-  }
-
-  // 9. Query Job by ID
-  if (normalized.startsWith('SELECT * FROM jobs WHERE id =')) {
-    const job = mockDb.jobs.find(j => j.id === params[0]);
-    return { rows: job ? [job] : [], rowCount: job ? 1 : 0 };
-  }
-
-  // 10. Assign Proposal / Accept Bid
-  if (normalized.startsWith('UPDATE jobs SET status = $1, freelancer_id = $2, escrow_id = $3 WHERE id = $4')) {
-    const status = params[0];
-    const freelancerId = params[1];
-    const escrowId = params[2];
-    const jobId = params[3];
-
-    const job = mockDb.jobs.find(j => j.id === jobId);
-    if (job) {
-      job.status = status;
-      job.freelancer_id = freelancerId;
-      job.escrow_id = escrowId;
-      job.updated_at = new Date().toISOString();
-      return { rows: [job], rowCount: 1 };
-    }
-    return { rows: [], rowCount: 0 };
-  }
-
-  // 11. Update Job status (release/refund)
-  if (normalized.startsWith('UPDATE jobs SET status = $1, tx_hash = $2 WHERE id = $3')) {
-    const status = params[0];
-    const txHash = params[1];
-    const jobId = params[2];
-
-    const job = mockDb.jobs.find(j => j.id === jobId);
-    if (job) {
-      job.status = status;
-      job.tx_hash = txHash;
-      job.updated_at = new Date().toISOString();
-      return { rows: [job], rowCount: 1 };
-    }
-    return { rows: [], rowCount: 0 };
-  }
-
-  // 12. Insert Proposal
-  if (normalized.startsWith('INSERT INTO proposals')) {
-    const prop = {
-      id: `p-${Math.random().toString(36).substring(2, 9)}`,
-      job_id: params[0],
-      freelancer_id: params[1],
-      bid_amount: parseFloat(params[2]),
-      cover_letter: params[3],
-      status: 'pending',
-      created_at: new Date().toISOString()
-    };
-    mockDb.proposals.push(prop);
-    return { rows: [prop], rowCount: 1 };
-  }
-
-  // 13. Query Proposals by Job ID
-  if (normalized.startsWith('SELECT * FROM proposals WHERE job_id =')) {
-    const filtered = mockDb.proposals.filter(p => p.job_id === params[0]);
+  // 8. Query Streams by Sender ID
+  if (normalized.startsWith('SELECT * FROM streams WHERE sender_id =')) {
+    const filtered = mockDb.streams.filter(s => s.sender_id === params[0]);
     return { rows: filtered, rowCount: filtered.length };
   }
 
-  // 14. Query Proposal by ID
-  if (normalized.startsWith('SELECT * FROM proposals WHERE id =')) {
-    const prop = mockDb.proposals.find(p => p.id === params[0]);
-    return { rows: prop ? [prop] : [], rowCount: prop ? 1 : 0 };
+  // 9. Query Streams by Recipient Address
+  if (normalized.startsWith('SELECT * FROM streams WHERE recipient_address =')) {
+    const filtered = mockDb.streams.filter(s => s.recipient_address === params[0]);
+    return { rows: filtered, rowCount: filtered.length };
   }
 
-  // 15. Update Proposal status
-  if (normalized.startsWith('UPDATE proposals')) {
-    const propId = params[params.length - 1];
-    const prop = mockDb.proposals.find(p => p.id === propId);
-    if (prop) {
-      prop.status = normalized.includes("'accepted'") ? 'accepted' : 'rejected';
-      return { rows: [prop], rowCount: 1 };
+  // 10. Query Stream by ID
+  if (normalized.startsWith('SELECT * FROM streams WHERE id =')) {
+    const stream = mockDb.streams.find(s => s.id === params[0]);
+    return { rows: stream ? [stream] : [], rowCount: stream ? 1 : 0 };
+  }
+
+  // 11. Update Stream Withdrawal (Recipient pulls)
+  if (normalized.startsWith('UPDATE streams SET withdrawn = $1, status = $2 WHERE id = $3')) {
+    const withdrawn = parseFloat(params[0]);
+    const status = params[1];
+    const streamId = params[2];
+
+    const stream = mockDb.streams.find(s => s.id === streamId);
+    if (stream) {
+      stream.withdrawn = withdrawn;
+      stream.status = status;
+      stream.updated_at = new Date().toISOString();
+      return { rows: [stream], rowCount: 1 };
     }
     return { rows: [], rowCount: 0 };
   }
 
-  // 16. Query User by Wallet Address
-  if (normalized.startsWith('SELECT * FROM users WHERE wallet_address =')) {
-    const user = mockDb.users.find(u => u.wallet_address === params[0]);
-    return { rows: user ? [user] : [], rowCount: user ? 1 : 0 };
+  // 12. Update Stream Status & Withdrawn on Cancel
+  if (normalized.startsWith('UPDATE streams SET status = $1, withdrawn = $2 WHERE id = $3')) {
+    const status = params[0];
+    const withdrawn = parseFloat(params[1]);
+    const streamId = params[2];
+
+    const stream = mockDb.streams.find(s => s.id === streamId);
+    if (stream) {
+      stream.status = status;
+      stream.withdrawn = withdrawn;
+      stream.updated_at = new Date().toISOString();
+      return { rows: [stream], rowCount: 1 };
+    }
+    return { rows: [], rowCount: 0 };
+  }
+
+  // 13. Insert Withdrawal Log
+  if (normalized.startsWith('INSERT INTO withdrawals')) {
+    const w = {
+      id: `wd-${Math.random().toString(36).substring(2, 9)}`,
+      stream_id: params[0],
+      amount: parseFloat(params[1]),
+      tx_hash: params[2],
+      created_at: new Date().toISOString()
+    };
+    mockDb.withdrawals.push(w);
+    return { rows: [w], rowCount: 1 };
+  }
+
+  // 14. Query Withdrawals by Stream ID
+  if (normalized.startsWith('SELECT * FROM withdrawals WHERE stream_id =')) {
+    const filtered = mockDb.withdrawals.filter(w => w.stream_id === params[0]);
+    return { rows: filtered, rowCount: filtered.length };
   }
 
   throw new Error(`Unsupported Mock SQL Query: ${normalized}`);

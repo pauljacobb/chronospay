@@ -3,161 +3,169 @@ import assert from 'node:assert';
 import app from './app.js';
 import { mockDb } from './db.js';
 
-let server;
-let port;
-let baseUrl;
+// Helper to make mock requests
+async function mockFetch(path, options = {}) {
+  const method = options.method || 'GET';
+  const headers = options.headers || {};
+  const body = options.body ? JSON.stringify(options.body) : null;
 
-let clientToken;
-let freelancerToken;
-let jobId;
-let proposalId;
+  if (body && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
 
-test.before(() => {
-  return new Promise((resolve) => {
-    process.env.ENCRYPTION_KEY = 'your_32_character_encryption_key_';
-    process.env.JWT_SECRET = 'dev_secret_key_gigflow';
-    
-    server = app.listen(0, () => {
-      port = server.address().port;
-      baseUrl = `http://localhost:${port}`;
-      resolve();
+  // Use dynamic import for supertest or simulate request if we want to avoid extra dependencies.
+  // Actually, we can use a custom request dispatcher since standard node fetch isn't bound to express directly without listening.
+  // Wait, is supertest or similar installed? Let's check package.json:
+  // It only lists: @stellar/stellar-sdk, bcryptjs, cors, dotenv, express, express-rate-limit, helmet, jsonwebtoken, pg, winston.
+  // So we don't have supertest. But we can easily start the express app on a random port, query it using global `fetch`, and shut it down after tests!
+  // This is a native and beautiful way to do it.
+}
+
+// Let's write the test suite
+test('ChronosPay API Integration Tests', async (t) => {
+  // Start server on a dynamic port
+  const server = await new Promise((resolve) => {
+    const s = app.listen(0, () => resolve(s));
+  });
+  const port = server.address().port;
+  const baseUrl = `http://localhost:${port}/api`;
+
+  let senderToken = '';
+  let recipientToken = '';
+  let testStreamId = '';
+  
+  const recipientWalletAddress = 'GD3V7SOP5HET7N2GCRMXK75L62LCR6WFFY6C6Y5AXKB3R2XWH7XCSHOH';
+
+  await t.test('Register Sender', async () => {
+    const res = await fetch(`${baseUrl}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Alice Sender',
+        email: 'alice@chronospay.io',
+        password: 'Password123!',
+        role: 'sender'
+      })
     });
-  });
-});
-
-test.after(() => {
-  return new Promise((resolve) => {
-    if (server) {
-      server.close(resolve);
-    } else {
-      resolve();
-    }
-  });
-});
-
-test('GET /health returns 200 OK', async () => {
-  const res = await fetch(`${baseUrl}/health`);
-  assert.strictEqual(res.status, 200);
-  const json = await res.json();
-  assert.strictEqual(json.status, 'OK');
-});
-
-test('POST /api/auth/register (Client)', async () => {
-  const payload = {
-    name: 'Gig Client',
-    email: `client_${Date.now()}@gigflow.com`,
-    password: 'password123',
-    role: 'client'
-  };
-
-  const res = await fetch(`${baseUrl}/api/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    
+    assert.strictEqual(res.status, 201);
+    const data = await res.json();
+    assert.ok(data.token);
+    assert.strictEqual(data.user.email, 'alice@chronospay.io');
+    senderToken = data.token;
   });
 
-  assert.strictEqual(res.status, 201);
-  const json = await res.json();
-  assert.ok(json.token);
-  assert.strictEqual(json.user.role, 'client');
-  clientToken = json.token;
-});
+  await t.test('Register Recipient', async () => {
+    const res = await fetch(`${baseUrl}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Bob Recipient',
+        email: 'bob@chronospay.io',
+        password: 'Password123!',
+        role: 'recipient',
+        walletAddress: recipientWalletAddress
+      })
+    });
 
-test('POST /api/auth/register (Freelancer)', async () => {
-  const payload = {
-    name: 'Gig Freelancer',
-    email: `freelancer_${Date.now()}@gigflow.com`,
-    password: 'password123',
-    role: 'freelancer'
-  };
-
-  const res = await fetch(`${baseUrl}/api/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    assert.strictEqual(res.status, 201);
+    const data = await res.json();
+    assert.ok(data.token);
+    assert.strictEqual(data.user.wallet_address, recipientWalletAddress);
+    recipientToken = data.token;
   });
 
-  assert.strictEqual(res.status, 201);
-  const json = await res.json();
-  assert.ok(json.token);
-  assert.strictEqual(json.user.role, 'freelancer');
-  freelancerToken = json.token;
-});
+  await t.test('Login User', async () => {
+    const res = await fetch(`${baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'alice@chronospay.io',
+        password: 'Password123!'
+      })
+    });
 
-test('POST /api/jobs creates a job listing and locks budget', async () => {
-  const payload = {
-    title: 'Develop Soroban Smart Contract',
-    description: 'Looking for a Rust developer to write custom escrow modules on Stellar.',
-    budget: '1500.00'
-  };
-
-  const res = await fetch(`${baseUrl}/api/jobs`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${clientToken}`
-    },
-    body: JSON.stringify(payload)
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.ok(data.token);
   });
 
-  assert.strictEqual(res.status, 201);
-  const json = await res.json();
-  assert.ok(json.success);
-  assert.strictEqual(json.job.title, payload.title);
-  assert.strictEqual(json.job.status, 'open');
-  jobId = json.job.id; // Save job ID
-});
+  await t.test('Create Payment Stream', async () => {
+    const startTime = new Date(Date.now() - 5000).toISOString(); // 5 seconds ago
+    const stopTime = new Date(Date.now() + 10000).toISOString(); // 10 seconds from now
 
-test('POST /api/jobs/:job_id/proposals bids on job', async () => {
-  const payload = {
-    bid_amount: '1450.00',
-    cover_letter: 'I have 3 years of Soroban and Stellar Rust experience.'
-  };
+    const res = await fetch(`${baseUrl}/streams`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${senderToken}`
+      },
+      body: JSON.stringify({
+        recipientAddress: recipientWalletAddress,
+        amount: '100.0000000',
+        startTime,
+        stopTime
+      })
+    });
 
-  const res = await fetch(`${baseUrl}/api/jobs/${jobId}/proposals`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${freelancerToken}`
-    },
-    body: JSON.stringify(payload)
+    assert.strictEqual(res.status, 201);
+    const data = await res.json();
+    assert.ok(data.success);
+    assert.strictEqual(data.stream.recipient_address, recipientWalletAddress);
+    assert.strictEqual(data.stream.status, 'active');
+    testStreamId = data.stream.id;
   });
 
-  assert.strictEqual(res.status, 201);
-  const json = await res.json();
-  assert.ok(json.success);
-  assert.strictEqual(json.proposal.cover_letter, payload.cover_letter);
-  proposalId = json.proposal.id; // Save proposal ID
-});
+  await t.test('List Sent Streams', async () => {
+    const res = await fetch(`${baseUrl}/streams/sent`, {
+      headers: { 'Authorization': `Bearer ${senderToken}` }
+    });
 
-test('POST /api/jobs/:id/assign assigns proposal to job', async () => {
-  const res = await fetch(`${baseUrl}/api/jobs/${jobId}/assign`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${clientToken}`
-    },
-    body: JSON.stringify({ proposal_id: proposalId })
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.ok(data.streams.length > 0);
   });
 
-  assert.strictEqual(res.status, 200);
-  const json = await res.json();
-  assert.ok(json.success);
-  assert.ok(json.escrowId);
-  assert.strictEqual(json.job.status, 'assigned');
-});
+  await t.test('List Received Streams', async () => {
+    const res = await fetch(`${baseUrl}/streams/received`, {
+      headers: { 'Authorization': `Bearer ${recipientToken}` }
+    });
 
-test('POST /api/jobs/:id/release completes job and releases escrow', async () => {
-  const res = await fetch(`${baseUrl}/api/jobs/${jobId}/release`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${clientToken}`
-    }
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.ok(data.streams.length > 0);
   });
 
-  assert.strictEqual(res.status, 200);
-  const json = await res.json();
-  assert.ok(json.success);
-  assert.strictEqual(json.job.status, 'completed');
-  assert.ok(json.txHash);
+  await t.test('Withdraw Vested Funds', async () => {
+    const res = await fetch(`${baseUrl}/streams/${testStreamId}/withdraw`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${recipientToken}`
+      },
+      body: JSON.stringify({
+        amountToWithdraw: '10.0000000'
+      })
+    });
+
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.ok(data.success);
+    assert.strictEqual(data.stream.withdrawn, 10);
+  });
+
+  await t.test('Cancel Stream', async () => {
+    const res = await fetch(`${baseUrl}/streams/${testStreamId}/cancel`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${senderToken}` }
+    });
+
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.ok(data.success);
+    assert.strictEqual(data.stream.status, 'cancelled');
+  });
+
+  // Close server
+  server.close();
 });

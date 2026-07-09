@@ -8,7 +8,7 @@ export function authenticateToken(req, res, next) {
     return res.status(401).json({ error: 'Access token required' });
   }
 
-  const jwtSecret = process.env.JWT_SECRET || 'dev_secret_key_gigflow';
+  const jwtSecret = process.env.JWT_SECRET || 'dev_secret_key_chronospay';
 
   jwt.verify(token, jwtSecret, (err, decoded) => {
     if (err) {

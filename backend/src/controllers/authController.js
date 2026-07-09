@@ -4,7 +4,7 @@ import { query } from '../db.js';
 import { generateKeypair, encryptSecretKey, fundTestnetAccount } from '../services/stellar.js';
 
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'your_32_character_encryption_key_';
-const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_key_gigflow';
+const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_key_chronospay';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
 export async function register(req, res) {
@@ -23,7 +23,6 @@ export async function register(req, res) {
     const salt = await bcrypt.genSalt(12);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // If walletAddress is not provided, we automatically generate a custodial keypair for them
     let resolvedWalletAddress = walletAddress;
     let newKp = null;
 
@@ -34,11 +33,10 @@ export async function register(req, res) {
 
     const userResult = await query(
       'INSERT INTO users (name, email, password_hash, role, wallet_address) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, role, wallet_address, created_at',
-      [name, email, passwordHash, role || 'client', resolvedWalletAddress]
+      [name, email, passwordHash, role || 'sender', resolvedWalletAddress]
     );
     const newUser = userResult.rows[0];
 
-    // Save custodial wallet record if generated
     if (newKp) {
       const { encryptedKey, iv } = encryptSecretKey(newKp.secretKey, ENCRYPTION_KEY);
       await query(
@@ -46,8 +44,7 @@ export async function register(req, res) {
         [newUser.id, newKp.publicKey, encryptedKey, iv]
       );
       
-      // Async seed
-      fundTestnetAccount(newKp.publicKey).catch(err => console.error("Wallet funding failed:", err.message));
+      fundTestnetAccount(newKp.publicKey).catch(err => console.error("Stellar funding failed:", err.message));
     }
 
     const token = jwt.sign(

@@ -1,10 +1,7 @@
 import app from './app.js';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 const PORT = process.env.PORT || 4000;
 
 app.listen(PORT, () => {
-  console.log(`GigFlow backend server listening on port ${PORT}`);
+  console.log(`ChronosPay backend server running on port ${PORT}`);
 });
